@@ -103,6 +103,7 @@ export interface IStorage {
   // Chat Messages
   createChatMessage(data: InsertChatMessage): Promise<ChatMessage>;
   getChatMessagesByWebinar(webinarId: string): Promise<ChatMessage[]>;
+  getChatMessagesBySession(webinarId: string, sessionId: string): Promise<ChatMessage[]>;
   
   // Likes
   getLikes(webinarId: string): Promise<Like | undefined>;
@@ -394,6 +395,18 @@ export class DatabaseStorage implements IStorage {
   async getChatMessagesByWebinar(webinarId: string): Promise<ChatMessage[]> {
     return db.select().from(chatMessages)
       .where(eq(chatMessages.webinarId, webinarId))
+      .orderBy(asc(chatMessages.sentAt));
+  }
+
+  async getChatMessagesBySession(webinarId: string, sessionId: string): Promise<ChatMessage[]> {
+    // Return only messages for this specific session (viewer's own messages + host replies to them)
+    return db.select().from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.webinarId, webinarId),
+          eq(chatMessages.sessionId, sessionId)
+        )
+      )
       .orderBy(asc(chatMessages.sentAt));
   }
 

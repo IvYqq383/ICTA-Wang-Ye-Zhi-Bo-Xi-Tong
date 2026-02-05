@@ -324,10 +324,12 @@ export type EmailReminder = typeof emailReminders.$inferSelect;
 export const chatMessages = pgTable("chat_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
+  sessionId: varchar("session_id"), // 觀眾獨立場次 ID（null = 公開訊息/主持人訊息）
   senderName: text("sender_name").notNull(),
-  senderType: text("sender_type").notNull().default("viewer"), // viewer, host, bot
+  senderType: text("sender_type").notNull().default("viewer"), // viewer, host, bot, scheduled
   message: text("message").notNull(),
   sentAt: timestamp("sent_at").defaultNow(),
+  isPrivate: boolean("is_private").default(false), // 只有該觀眾和主持人能看到
 });
 
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, sentAt: true });

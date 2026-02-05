@@ -29,8 +29,12 @@ declare module "express-session" {
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "aa3210";
 
-// WebSocket connections per webinar
-const webinarConnections = new Map<string, Set<WebSocket>>();
+// WebSocket connections - now session-based for viewer isolation
+// Key: sessionId (unique per viewer session)
+const sessionConnections = new Map<string, WebSocket>();
+// Key: webinarId, Value: Set of sessionIds (for tracking)
+const webinarSessions = new Map<string, Set<string>>();
+// Host connections per webinar (can see all sessions)
 const hostConnections = new Map<string, Set<WebSocket>>();
 
 // Middleware for admin routes
@@ -51,6 +55,7 @@ export async function registerRoutes(
 
   wss.on("connection", (ws) => {
     let currentWebinarId: string | null = null;
+    let currentSessionId: string | null = null;
     let isHost = false;
 
     ws.on("message", async (data) => {
@@ -59,29 +64,43 @@ export async function registerRoutes(
         
         switch (message.type) {
           case "join": {
-            const { webinarId, nickname } = message.data;
+            // Each viewer gets a unique session - complete isolation
+            const { webinarId, sessionId, nickname } = message.data;
             currentWebinarId = webinarId;
+            currentSessionId = sessionId;
             
-            if (!webinarConnections.has(webinarId)) {
-              webinarConnections.set(webinarId, new Set());
+            // Store session connection
+            sessionConnections.set(sessionId, ws);
+            
+            // Track sessions per webinar
+            if (!webinarSessions.has(webinarId)) {
+              webinarSessions.set(webinarId, new Set());
             }
-            webinarConnections.get(webinarId)!.add(ws);
+            webinarSessions.get(webinarId)!.add(sessionId);
             
-            // Send history
-            const messages = await storage.getChatMessagesByWebinar(webinarId);
+            // Send ONLY this session's messages (not other viewers')
+            // For new sessions, this will be empty - they only see scheduled messages
+            const sessionMessages = await storage.getChatMessagesBySession(webinarId, sessionId);
             const likeData = await storage.getLikes(webinarId);
+            
             ws.send(JSON.stringify({
               type: "history",
               data: {
-                messages,
+                messages: sessionMessages,
                 likeCount: likeData?.count || 0
               }
             }));
             
-            // Broadcast viewer count
-            broadcastToWebinar(webinarId, {
+            // Send session ID confirmation
+            ws.send(JSON.stringify({
+              type: "sessionConfirmed",
+              data: { sessionId }
+            }));
+            
+            // Update viewer count for hosts only
+            broadcastToHosts(webinarId, {
               type: "viewerCount",
-              data: { count: webinarConnections.get(webinarId)!.size }
+              data: { count: webinarSessions.get(webinarId)?.size || 0 }
             });
             break;
           }
@@ -96,19 +115,19 @@ export async function registerRoutes(
             }
             hostConnections.get(webinarId)!.add(ws);
             
-            // Send history
-            const messages = await storage.getChatMessagesByWebinar(webinarId);
+            // Hosts see ALL messages from all sessions
+            const allMessages = await storage.getChatMessagesByWebinar(webinarId);
             const likeData = await storage.getLikes(webinarId);
             ws.send(JSON.stringify({
               type: "history",
               data: {
-                messages,
+                messages: allMessages,
                 likeCount: likeData?.count || 0
               }
             }));
             
             // Send viewer count
-            const viewerCount = webinarConnections.get(webinarId)?.size || 0;
+            const viewerCount = webinarSessions.get(webinarId)?.size || 0;
             ws.send(JSON.stringify({
               type: "viewerCount",
               data: { count: viewerCount }
@@ -117,35 +136,99 @@ export async function registerRoutes(
           }
           
           case "chat": {
-            const { webinarId, senderName, message: chatMessage, senderType } = message.data;
+            const { webinarId, sessionId, senderName, message: chatMessage, senderType } = message.data;
             
+            // Save message with session ID (private to this viewer)
             const savedMessage = await storage.createChatMessage({
               webinarId,
+              sessionId,
               senderName,
               message: chatMessage,
-              senderType: senderType || "viewer"
+              senderType: senderType || "viewer",
+              isPrivate: true // Viewer messages are private
             });
             
-            // Broadcast to all viewers and hosts
-            broadcastToWebinar(webinarId, {
-              type: "chat",
-              data: savedMessage
-            });
+            // Send ONLY to this viewer's session (not other viewers)
+            const viewerWs = sessionConnections.get(sessionId);
+            if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
+              viewerWs.send(JSON.stringify({
+                type: "chat",
+                data: savedMessage
+              }));
+            }
+            
+            // Also send to hosts so they can see all conversations
             broadcastToHosts(webinarId, {
               type: "chat",
-              data: savedMessage
+              data: { ...savedMessage, sessionId }
             });
             break;
           }
           
+          case "hostReply": {
+            // Host replying to a specific viewer's session
+            const { webinarId, sessionId, senderName, message: chatMessage } = message.data;
+            
+            const savedMessage = await storage.createChatMessage({
+              webinarId,
+              sessionId,
+              senderName,
+              message: chatMessage,
+              senderType: "host",
+              isPrivate: true
+            });
+            
+            // Send to the specific viewer
+            const viewerWs = sessionConnections.get(sessionId);
+            if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
+              viewerWs.send(JSON.stringify({
+                type: "chat",
+                data: savedMessage
+              }));
+            }
+            
+            // Also send to all hosts
+            broadcastToHosts(webinarId, {
+              type: "chat",
+              data: { ...savedMessage, sessionId }
+            });
+            break;
+          }
+          
+          case "scheduledMessage": {
+            // Scheduled/fake user messages - only send to specific session
+            const { webinarId, sessionId, senderName, message: chatMessage } = message.data;
+            
+            const viewerWs = sessionConnections.get(sessionId);
+            if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
+              viewerWs.send(JSON.stringify({
+                type: "chat",
+                data: {
+                  id: `scheduled-${Date.now()}`,
+                  webinarId,
+                  senderName,
+                  message: chatMessage,
+                  senderType: "scheduled",
+                  sentAt: new Date().toISOString()
+                }
+              }));
+            }
+            break;
+          }
+          
           case "like": {
-            const { webinarId } = message.data;
+            const { webinarId, sessionId } = message.data;
             const newCount = await storage.incrementLikes(webinarId);
             
-            broadcastToWebinar(webinarId, {
-              type: "like",
-              data: { count: newCount }
-            });
+            // Only send like update to this viewer
+            const viewerWs = sessionConnections.get(sessionId);
+            if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
+              viewerWs.send(JSON.stringify({
+                type: "like",
+                data: { count: newCount }
+              }));
+            }
+            
             broadcastToHosts(webinarId, {
               type: "like",
               data: { count: newCount }
@@ -154,23 +237,21 @@ export async function registerRoutes(
           }
           
           case "vote": {
-            const { pollId, optionIndex } = message.data;
-            const participantId = Math.random().toString(36).substring(7);
+            const { pollId, optionIndex, sessionId } = message.data;
             
             await storage.createPollVote({
               pollId,
-              participantId,
+              participantId: sessionId || Math.random().toString(36).substring(7),
               optionIndex
             });
             
-            // Calculate and broadcast results
+            // Calculate and send results to this voter only
             const votes = await storage.getPollVotes(pollId);
             const results: Record<number, number> = {};
             votes.forEach(v => {
               results[v.optionIndex] = (results[v.optionIndex] || 0) + 1;
             });
             
-            // Send results to voter
             ws.send(JSON.stringify({
               type: "pollResults",
               data: { results }
@@ -179,14 +260,27 @@ export async function registerRoutes(
           }
           
           case "triggerPoll": {
-            const { webinarId, pollId } = message.data;
+            // Host triggers poll for a specific session or all sessions
+            const { webinarId, pollId, sessionId } = message.data;
             const poll = await storage.getPoll(pollId);
             
             if (poll) {
-              broadcastToWebinar(webinarId, {
-                type: "poll",
-                data: poll
-              });
+              if (sessionId) {
+                // Send to specific session
+                const viewerWs = sessionConnections.get(sessionId);
+                if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
+                  viewerWs.send(JSON.stringify({
+                    type: "poll",
+                    data: poll
+                  }));
+                }
+              } else {
+                // Send to all sessions in webinar
+                broadcastToAllSessions(webinarId, {
+                  type: "poll",
+                  data: poll
+                });
+              }
             }
             break;
           }
@@ -200,27 +294,26 @@ export async function registerRoutes(
       if (currentWebinarId) {
         if (isHost) {
           hostConnections.get(currentWebinarId)?.delete(ws);
-        } else {
-          webinarConnections.get(currentWebinarId)?.delete(ws);
-          broadcastToWebinar(currentWebinarId, {
-            type: "viewerCount",
-            data: { count: webinarConnections.get(currentWebinarId)?.size || 0 }
-          });
+        } else if (currentSessionId) {
+          sessionConnections.delete(currentSessionId);
+          webinarSessions.get(currentWebinarId)?.delete(currentSessionId);
+          
           broadcastToHosts(currentWebinarId, {
             type: "viewerCount",
-            data: { count: webinarConnections.get(currentWebinarId)?.size || 0 }
+            data: { count: webinarSessions.get(currentWebinarId)?.size || 0 }
           });
         }
       }
     });
   });
 
-  function broadcastToWebinar(webinarId: string, message: any) {
-    const connections = webinarConnections.get(webinarId);
-    if (connections) {
+  function broadcastToAllSessions(webinarId: string, message: any) {
+    const sessions = webinarSessions.get(webinarId);
+    if (sessions) {
       const data = JSON.stringify(message);
-      connections.forEach(ws => {
-        if (ws.readyState === WebSocket.OPEN) {
+      sessions.forEach(sessionId => {
+        const ws = sessionConnections.get(sessionId);
+        if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(data);
         }
       });

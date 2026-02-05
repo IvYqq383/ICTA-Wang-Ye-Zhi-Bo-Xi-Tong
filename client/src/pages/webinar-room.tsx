@@ -11,8 +11,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Heart, Send, Users, Loader2, ExternalLink } from "lucide-react";
-import type { Webinar, ChatMessage, CtaButton, Poll } from "@shared/schema";
+import { Heart, Send, Users, Loader2, ExternalLink, X, Info } from "lucide-react";
+import type { Webinar, ChatMessage, CtaButton, Poll, ScheduledMessage, Tip, FakeUser } from "@shared/schema";
 
 interface WebSocketMessage {
   type: string;
@@ -27,6 +27,18 @@ export default function WebinarRoom() {
   const [nickname, setNickname] = useState("");
   const [isJoined, setIsJoined] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
+  
+  // Session ID - unique for each viewer's isolated experience
+  const [sessionId] = useState(() => {
+    // Check localStorage for existing session, or create new one
+    const storageKey = `webinar_session_${id}`;
+    let storedSession = localStorage.getItem(storageKey);
+    if (!storedSession) {
+      storedSession = `session_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      localStorage.setItem(storageKey, storedSession);
+    }
+    return storedSession;
+  });
   
   // Video state
   const [currentTime, setCurrentTime] = useState(0);
@@ -55,6 +67,13 @@ export default function WebinarRoom() {
   // WebSocket
   const wsRef = useRef<WebSocket | null>(null);
   const [viewerCount, setViewerCount] = useState(1);
+  
+  // Scheduled messages tracking (which have been shown)
+  const shownMessagesRef = useRef<Set<string>>(new Set());
+  
+  // Tips state
+  const [visibleTip, setVisibleTip] = useState<Tip | null>(null);
+  const shownTipsRef = useRef<Set<string>>(new Set());
 
   const { data: webinar, isLoading } = useQuery<Webinar>({
     queryKey: ["/api/webinars", id],
@@ -63,6 +82,24 @@ export default function WebinarRoom() {
 
   const { data: ctas } = useQuery<CtaButton[]>({
     queryKey: ["/api/webinars", id, "ctas"],
+    enabled: !!id && isJoined,
+  });
+  
+  // Fetch scheduled messages (fake user messages)
+  const { data: scheduledMessages } = useQuery<ScheduledMessage[]>({
+    queryKey: ["/api/webinars", id, "scheduled-messages"],
+    enabled: !!id && isJoined,
+  });
+  
+  // Fetch fake users for scheduled message names
+  const { data: fakeUsers } = useQuery<FakeUser[]>({
+    queryKey: ["/api/webinars", id, "fake-users"],
+    enabled: !!id && isJoined,
+  });
+  
+  // Fetch tips
+  const { data: tips } = useQuery<Tip[]>({
+    queryKey: ["/api/webinars", id, "tips"],
     enabled: !!id && isJoined,
   });
 
@@ -106,19 +143,68 @@ export default function WebinarRoom() {
     
     setVisibleCtas(visible);
   }, [currentTime, ctas]);
-
-  // WebSocket connection
+  
+  // Trigger scheduled messages based on video playback time
+  // Each viewer sees these messages independently at the same relative time
   useEffect(() => {
-    if (!isJoined || !id) return;
+    if (!scheduledMessages || !fakeUsers || !isPlaying) return;
+    
+    scheduledMessages.forEach((msg) => {
+      const msgKey = `msg_${msg.id}`;
+      if (currentTime >= msg.triggerTime && !shownMessagesRef.current.has(msgKey)) {
+        shownMessagesRef.current.add(msgKey);
+        
+        // Find the fake user's name
+        const fakeUser = fakeUsers.find(u => u.id === msg.fakeUserId);
+        const senderName = fakeUser?.name || "觀眾";
+        
+        // Add scheduled message to chat (fake user message)
+        const chatMsg: ChatMessage = {
+          id: `scheduled_${msg.id}_${Date.now()}`,
+          webinarId: id!,
+          sessionId: null,
+          senderName,
+          message: msg.message,
+          senderType: "scheduled",
+          sentAt: new Date(),
+          isPrivate: false
+        };
+        setMessages((prev) => [...prev, chatMsg]);
+      }
+    });
+  }, [currentTime, scheduledMessages, fakeUsers, isPlaying, id]);
+  
+  // Trigger tips based on video playback time
+  useEffect(() => {
+    if (!tips || !isPlaying) return;
+    
+    tips.forEach((tip) => {
+      const tipKey = `tip_${tip.id}`;
+      if (currentTime >= tip.triggerTime && !shownTipsRef.current.has(tipKey)) {
+        shownTipsRef.current.add(tipKey);
+        setVisibleTip(tip);
+        
+        // Auto-hide tip after 10 seconds
+        setTimeout(() => {
+          setVisibleTip((current) => current?.id === tip.id ? null : current);
+        }, 10000);
+      }
+    });
+  }, [currentTime, tips, isPlaying]);
+
+  // WebSocket connection - session-based for viewer isolation
+  useEffect(() => {
+    if (!isJoined || !id || !sessionId) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      // Join with unique session ID for isolated experience
       ws.send(JSON.stringify({
         type: "join",
-        data: { webinarId: id, nickname }
+        data: { webinarId: id, sessionId, nickname }
       }));
     };
 
@@ -135,7 +221,7 @@ export default function WebinarRoom() {
           setTimeout(() => setShowLikeAnimation(false), 300);
           break;
         case "viewerCount":
-          setViewerCount(msg.data.count);
+          // Viewers don't see other viewer counts - isolated experience
           break;
         case "poll":
           setActivePoll(msg.data);
@@ -153,6 +239,9 @@ export default function WebinarRoom() {
           setMessages(msg.data.messages || []);
           setLikeCount(msg.data.likeCount || 0);
           break;
+        case "sessionConfirmed":
+          console.log("Session confirmed:", msg.data.sessionId);
+          break;
       }
     };
 
@@ -163,7 +252,7 @@ export default function WebinarRoom() {
     return () => {
       ws.close();
     };
-  }, [isJoined, id, nickname]);
+  }, [isJoined, id, nickname, sessionId]);
 
   // Auto scroll chat
   useEffect(() => {
@@ -186,10 +275,12 @@ export default function WebinarRoom() {
   const sendMessage = () => {
     if (!messageInput.trim() || !wsRef.current) return;
     
+    // Include sessionId for isolated messaging
     wsRef.current.send(JSON.stringify({
       type: "chat",
       data: {
         webinarId: id,
+        sessionId,
         senderName: nickname,
         message: messageInput.trim(),
         senderType: "viewer"
@@ -202,20 +293,23 @@ export default function WebinarRoom() {
   const sendLike = () => {
     if (!wsRef.current) return;
     
+    // Include sessionId for isolated like counting per session
     wsRef.current.send(JSON.stringify({
       type: "like",
-      data: { webinarId: id }
+      data: { webinarId: id, sessionId }
     }));
   };
 
   const submitVote = () => {
     if (selectedOption === null || !wsRef.current || !activePoll) return;
     
+    // Include sessionId for vote tracking
     wsRef.current.send(JSON.stringify({
       type: "vote",
       data: {
         pollId: activePoll.id,
-        optionIndex: selectedOption
+        optionIndex: selectedOption,
+        sessionId
       }
     }));
     
@@ -314,6 +408,32 @@ export default function WebinarRoom() {
                 {viewerCount} 人觀看
               </Badge>
             </div>
+            
+            {/* Tip Card */}
+            {visibleTip && (
+              <div className="absolute top-4 right-4 z-20 max-w-xs animate-in slide-in-from-right duration-300" data-testid="tip-card">
+                <Card className="bg-white/95 dark:bg-card/95 backdrop-blur shadow-lg">
+                  <CardContent className="p-3">
+                    <div className="flex items-start gap-2">
+                      <Info className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="font-medium text-sm">{visibleTip.title}</h4>
+                        <p className="text-xs text-muted-foreground mt-1">{visibleTip.content}</p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 -mt-1 -mr-1"
+                        onClick={() => setVisibleTip(null)}
+                        data-testid="button-close-tip"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         </div>
 
