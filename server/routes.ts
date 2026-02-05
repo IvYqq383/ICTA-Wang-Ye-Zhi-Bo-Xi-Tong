@@ -10,6 +10,12 @@ import {
   insertScheduledMessageSchema,
   insertCtaButtonSchema,
   insertPollSchema,
+  insertTipSchema,
+  insertQuestionSchema,
+  insertFeedbackSurveySchema,
+  insertFeedbackResponseSchema,
+  insertViewerProgressSchema,
+  insertWebinarSessionSchema,
 } from "@shared/schema";
 
 // Session type extension
@@ -416,6 +422,218 @@ export async function registerRoutes(
   app.delete("/api/webinars/:id/polls/:pollId", requireAdmin, async (req, res) => {
     await storage.deletePoll(req.params.pollId as string);
     res.json({ success: true });
+  });
+
+  // ============ Tips Routes ============
+  app.get("/api/webinars/:id/tips", async (req, res) => {
+    const tipsList = await storage.getTipsByWebinar(req.params.id);
+    res.json(tipsList);
+  });
+
+  app.post("/api/webinars/:id/tips", requireAdmin, async (req, res) => {
+    try {
+      const data = insertTipSchema.parse({
+        ...req.body,
+        webinarId: req.params.id
+      });
+      const tip = await storage.createTip(data);
+      res.json(tip);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/webinars/:id/tips/:tipId", requireAdmin, async (req, res) => {
+    await storage.deleteTip(req.params.tipId as string);
+    res.json({ success: true });
+  });
+
+  // ============ Questions (Q&A) Routes ============
+  app.get("/api/webinars/:id/questions", async (req, res) => {
+    const questionsList = await storage.getQuestionsByWebinar(req.params.id);
+    res.json(questionsList);
+  });
+
+  app.get("/api/webinars/:id/questions/preset", async (req, res) => {
+    const presetQuestions = await storage.getPresetQuestions(req.params.id);
+    res.json(presetQuestions);
+  });
+
+  app.post("/api/webinars/:id/questions", async (req, res) => {
+    try {
+      const data = insertQuestionSchema.parse({
+        ...req.body,
+        webinarId: req.params.id
+      });
+      const question = await storage.createQuestion(data);
+      res.json(question);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/webinars/:id/questions/:questionId", requireAdmin, async (req, res) => {
+    try {
+      const question = await storage.updateQuestion(req.params.questionId as string, req.body);
+      res.json(question);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/webinars/:id/questions/:questionId", requireAdmin, async (req, res) => {
+    await storage.deleteQuestion(req.params.questionId as string);
+    res.json({ success: true });
+  });
+
+  // ============ Feedback Survey Routes ============
+  app.get("/api/webinars/:id/feedback-survey", async (req, res) => {
+    const survey = await storage.getFeedbackSurveyByWebinar(req.params.id);
+    res.json(survey || null);
+  });
+
+  app.post("/api/webinars/:id/feedback-survey", requireAdmin, async (req, res) => {
+    try {
+      const data = insertFeedbackSurveySchema.parse({
+        ...req.body,
+        webinarId: req.params.id
+      });
+      const survey = await storage.createFeedbackSurvey(data);
+      res.json(survey);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/webinars/:id/feedback-survey/:surveyId", requireAdmin, async (req, res) => {
+    try {
+      const survey = await storage.updateFeedbackSurvey(req.params.surveyId as string, req.body);
+      res.json(survey);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // ============ Feedback Responses Routes ============
+  app.post("/api/feedback-responses", async (req, res) => {
+    try {
+      const data = insertFeedbackResponseSchema.parse(req.body);
+      const response = await storage.createFeedbackResponse(data);
+      res.json(response);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/feedback-surveys/:surveyId/responses", requireAdmin, async (req, res) => {
+    const responses = await storage.getFeedbackResponsesBySurvey(req.params.surveyId as string);
+    res.json(responses);
+  });
+
+  // ============ Viewer Progress Routes ============
+  app.get("/api/webinars/:id/progress/:sessionId", async (req, res) => {
+    const progress = await storage.getViewerProgress(req.params.id as string, req.params.sessionId as string);
+    res.json(progress || { lastPosition: 0, totalWatched: 0 });
+  });
+
+  app.post("/api/webinars/:id/progress", async (req, res) => {
+    try {
+      const data = insertViewerProgressSchema.parse({
+        ...req.body,
+        webinarId: req.params.id
+      });
+      const progress = await storage.upsertViewerProgress(data);
+      res.json(progress);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // ============ Analytics Routes ============
+  app.get("/api/webinars/:id/analytics", requireAdmin, async (req, res) => {
+    const webinarId = req.params.id as string;
+    const webinar = await storage.getWebinar(webinarId);
+    if (!webinar) {
+      return res.status(404).json({ message: "Webinar not found" });
+    }
+
+    const analytics = await storage.getWebinarAnalytics(webinarId);
+    const registrations = await storage.getRegistrationsByWebinar(webinarId);
+    
+    // Calculate summary stats
+    const totalRegistrations = registrations.length;
+    const attended = registrations.filter(r => r.attended).length;
+    const attendanceRate = totalRegistrations > 0 ? (attended / totalRegistrations * 100) : 0;
+    const totalWatchTime = registrations.reduce((sum, r) => sum + (r.watchDuration || 0), 0);
+    const avgWatchTime = attended > 0 ? Math.round(totalWatchTime / attended) : 0;
+
+    res.json({
+      webinar,
+      summary: {
+        totalRegistrations,
+        attended,
+        attendanceRate: Math.round(attendanceRate * 10) / 10,
+        avgWatchTime,
+        videoDuration: webinar.videoDuration || 0,
+      },
+      analytics,
+      registrations,
+    });
+  });
+
+  // ============ Webinar Sessions Routes ============
+  app.get("/api/webinars/:id/sessions", async (req, res) => {
+    const sessions = await storage.getUpcomingSessions(req.params.id);
+    res.json(sessions);
+  });
+
+  app.post("/api/webinars/:id/sessions", requireAdmin, async (req, res) => {
+    try {
+      const data = insertWebinarSessionSchema.parse({
+        ...req.body,
+        webinarId: req.params.id
+      });
+      const session = await storage.createWebinarSession(data);
+      res.json(session);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // ============ Update Webinar Settings ============
+  app.patch("/api/webinars/:id", requireAdmin, async (req, res) => {
+    try {
+      const webinar = await storage.updateWebinar(req.params.id as string, req.body);
+      res.json(webinar);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // ============ Mark Attendance ============
+  app.post("/api/registrations/:id/attend", async (req, res) => {
+    try {
+      const registration = await storage.updateRegistration(req.params.id as string, {
+        attended: true,
+        attendedAt: new Date(),
+      });
+      res.json(registration);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/registrations/:id/leave", async (req, res) => {
+    try {
+      const { watchDuration } = req.body;
+      const registration = await storage.updateRegistration(req.params.id as string, {
+        leftAt: new Date(),
+        watchDuration,
+      });
+      res.json(registration);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
   });
 
   return httpServer;

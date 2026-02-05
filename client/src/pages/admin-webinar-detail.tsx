@@ -18,9 +18,30 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   ArrowLeft, Plus, Users, MessageSquare, MousePointerClick, 
-  BarChart, Trash2, Loader2, Clock, Radio, Copy, ExternalLink
+  BarChart, Trash2, Loader2, Clock, Radio, Copy, ExternalLink,
+  Lightbulb, HelpCircle, Star, TrendingUp
 } from "lucide-react";
-import type { Webinar, FakeUser, ScheduledMessage, CtaButton, Poll, Registration } from "@shared/schema";
+import type { Webinar, FakeUser, ScheduledMessage, CtaButton, Poll, Registration, Tip, Question, FeedbackSurvey } from "@shared/schema";
+
+// Analytics Response Type
+interface AnalyticsResponse {
+  webinar: Webinar;
+  summary: {
+    totalRegistrations: number;
+    attended: number;
+    attendanceRate: number;
+    avgWatchTime: number;
+    videoDuration: number;
+  };
+  analytics: Array<{
+    id: string;
+    webinarId: string;
+    sessionDate: Date;
+    registrations: number | null;
+    attendees: number | null;
+  }>;
+  registrations: Registration[];
+}
 
 // Fake User Schema
 const fakeUserSchema = z.object({
@@ -52,6 +73,14 @@ const pollSchema = z.object({
   duration: z.string().default("60"),
 });
 
+// Tip Schema
+const tipSchema = z.object({
+  title: z.string().min(1, "請輸入標題"),
+  content: z.string().min(1, "請輸入內容"),
+  triggerTime: z.string().min(1, "請輸入觸發時間"),
+  duration: z.string().default("30"),
+});
+
 export default function AdminWebinarDetail() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -61,6 +90,7 @@ export default function AdminWebinarDetail() {
   const [isMessageOpen, setIsMessageOpen] = useState(false);
   const [isCtaOpen, setIsCtaOpen] = useState(false);
   const [isPollOpen, setIsPollOpen] = useState(false);
+  const [isTipOpen, setIsTipOpen] = useState(false);
 
   // Queries
   const { data: webinar, isLoading: webinarLoading } = useQuery<Webinar>({
@@ -93,6 +123,21 @@ export default function AdminWebinarDetail() {
     enabled: !!id,
   });
 
+  const { data: tips } = useQuery<Tip[]>({
+    queryKey: ["/api/webinars", id, "tips"],
+    enabled: !!id,
+  });
+
+  const { data: questions } = useQuery<Question[]>({
+    queryKey: ["/api/webinars", id, "questions"],
+    enabled: !!id,
+  });
+
+  const { data: analytics } = useQuery<AnalyticsResponse>({
+    queryKey: ["/api/webinars", id, "analytics"],
+    enabled: !!id,
+  });
+
   // Forms
   const fakeUserForm = useForm({
     resolver: zodResolver(fakeUserSchema),
@@ -112,6 +157,11 @@ export default function AdminWebinarDetail() {
   const pollForm = useForm({
     resolver: zodResolver(pollSchema),
     defaultValues: { question: "", options: "", triggerTime: "", duration: "60" },
+  });
+
+  const tipForm = useForm({
+    resolver: zodResolver(tipSchema),
+    defaultValues: { title: "", content: "", triggerTime: "", duration: "30" },
   });
 
   // Mutations
@@ -180,6 +230,24 @@ export default function AdminWebinarDetail() {
       setIsPollOpen(false);
       pollForm.reset();
       toast({ title: "投票已建立" });
+    },
+  });
+
+  const createTip = useMutation({
+    mutationFn: async (data: z.infer<typeof tipSchema>) => {
+      const [min, sec] = data.triggerTime.split(":").map(Number);
+      return apiRequest("POST", `/api/webinars/${id}/tips`, {
+        title: data.title,
+        content: data.content,
+        triggerTime: min * 60 + (sec || 0),
+        duration: parseInt(data.duration),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "tips"] });
+      setIsTipOpen(false);
+      tipForm.reset();
+      toast({ title: "小提示已建立" });
     },
   });
 
@@ -263,7 +331,7 @@ export default function AdminWebinarDetail() {
         </Card>
 
         <Tabs defaultValue="fake-users">
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 flex-wrap h-auto gap-1">
             <TabsTrigger value="fake-users">
               <Users className="h-4 w-4 mr-1" />
               假人
@@ -274,15 +342,27 @@ export default function AdminWebinarDetail() {
             </TabsTrigger>
             <TabsTrigger value="ctas">
               <MousePointerClick className="h-4 w-4 mr-1" />
-              CTA 按鈕
+              CTA
             </TabsTrigger>
             <TabsTrigger value="polls">
               <BarChart className="h-4 w-4 mr-1" />
               投票
             </TabsTrigger>
+            <TabsTrigger value="tips">
+              <Lightbulb className="h-4 w-4 mr-1" />
+              提示
+            </TabsTrigger>
+            <TabsTrigger value="questions">
+              <HelpCircle className="h-4 w-4 mr-1" />
+              Q&A
+            </TabsTrigger>
             <TabsTrigger value="registrations">
               <Users className="h-4 w-4 mr-1" />
               報名 ({registrations?.length || 0})
+            </TabsTrigger>
+            <TabsTrigger value="analytics">
+              <TrendingUp className="h-4 w-4 mr-1" />
+              分析
             </TabsTrigger>
           </TabsList>
 
@@ -745,15 +825,237 @@ export default function AdminWebinarDetail() {
                             <p className="font-medium">{reg.name}</p>
                             <p className="text-sm text-muted-foreground">{reg.email}</p>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(reg.registeredAt!).toLocaleString("zh-TW")}
-                          </p>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(reg.registeredAt!).toLocaleString("zh-TW")}
+                            </p>
+                            {reg.attended && (
+                              <Badge variant="secondary" className="text-xs mt-1">
+                                <Star className="h-3 w-3 mr-1" />
+                                已參加
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   </ScrollArea>
                 ) : (
                   <p className="text-center text-muted-foreground py-8">尚無報名</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Tips Tab */}
+          <TabsContent value="tips">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-base">小提示卡</CardTitle>
+                  <CardDescription>在特定時間點顯示的提示訊息</CardDescription>
+                </div>
+                <Dialog open={isTipOpen} onOpenChange={setIsTipOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" data-testid="button-add-tip">
+                      <Plus className="h-4 w-4 mr-1" />
+                      新增提示
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>新增小提示</DialogTitle>
+                    </DialogHeader>
+                    <Form {...tipForm}>
+                      <form onSubmit={tipForm.handleSubmit((data) => createTip.mutate(data))} className="space-y-4">
+                        <FormField
+                          control={tipForm.control}
+                          name="title"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>標題</FormLabel>
+                              <FormControl>
+                                <Input placeholder="重要提示" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={tipForm.control}
+                          name="content"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>內容</FormLabel>
+                              <FormControl>
+                                <Textarea placeholder="輸入提示內容..." {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField
+                            control={tipForm.control}
+                            name="triggerTime"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>觸發時間 (分:秒)</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="2:30" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={tipForm.control}
+                            name="duration"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>顯示時間（秒）</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="30" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <Button type="submit" disabled={createTip.isPending}>
+                          {createTip.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          建立
+                        </Button>
+                      </form>
+                    </Form>
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent>
+                {tips && tips.length > 0 ? (
+                  <div className="space-y-2">
+                    {tips.sort((a, b) => a.triggerTime - b.triggerTime).map((tip) => (
+                      <div key={tip.id} className="flex items-start justify-between p-3 bg-muted rounded-md gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">
+                              <Clock className="h-3 w-3 mr-1" />
+                              {formatTime(tip.triggerTime)}
+                            </Badge>
+                            <Badge variant="secondary">{tip.duration}秒</Badge>
+                          </div>
+                          <p className="font-medium text-sm mt-1">{tip.title}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{tip.content}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteMutation.mutate({ type: "tips", itemId: tip.id })}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">尚無提示</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Q&A Tab */}
+          <TabsContent value="questions">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">觀眾問答</CardTitle>
+                <CardDescription>觀眾在直播中提交的問題</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {questions && questions.length > 0 ? (
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-2">
+                      {questions.map((q) => (
+                        <div key={q.id} className="p-3 bg-muted rounded-md">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-sm">{q.askerName || "匿名"}</span>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={q.answer ? "secondary" : "outline"}>
+                                {q.answer ? "已回覆" : "待回覆"}
+                              </Badge>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => deleteMutation.mutate({ type: "questions", itemId: q.id })}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="text-sm">{q.question}</p>
+                          {q.answer && (
+                            <div className="mt-2 pl-3 border-l-2 border-primary">
+                              <p className="text-sm text-muted-foreground">{q.answer}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">尚無問題</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">數據分析</CardTitle>
+                <CardDescription>查看直播的統計數據</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {analytics ? (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-4 bg-muted rounded-md text-center">
+                        <p className="text-2xl font-bold">{analytics.summary?.totalRegistrations || 0}</p>
+                        <p className="text-xs text-muted-foreground">報名人數</p>
+                      </div>
+                      <div className="p-4 bg-muted rounded-md text-center">
+                        <p className="text-2xl font-bold">{analytics.summary?.attended || 0}</p>
+                        <p className="text-xs text-muted-foreground">參加人數</p>
+                      </div>
+                      <div className="p-4 bg-muted rounded-md text-center">
+                        <p className="text-2xl font-bold">{analytics.summary?.attendanceRate?.toFixed(1) || 0}%</p>
+                        <p className="text-xs text-muted-foreground">出席率</p>
+                      </div>
+                      <div className="p-4 bg-muted rounded-md text-center">
+                        <p className="text-2xl font-bold">{formatTime(analytics.summary?.avgWatchTime || 0)}</p>
+                        <p className="text-xs text-muted-foreground">平均觀看時間</p>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium mb-2">觀眾出席詳情</h4>
+                      <ScrollArea className="h-[200px]">
+                        <div className="space-y-2">
+                          {analytics.registrations?.filter((r) => r.attended).map((reg) => (
+                            <div key={reg.id} className="flex items-center justify-between p-2 bg-muted rounded-md text-sm">
+                              <span>{reg.name}</span>
+                              <span className="text-muted-foreground">
+                                觀看 {formatTime(reg.watchDuration || 0)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">尚無分析數據</p>
                 )}
               </CardContent>
             </Card>

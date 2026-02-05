@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Webinars (直播間)
+// Webinars (直播間) - 擴展版
 export const webinars = pgTable("webinars", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
@@ -13,15 +13,66 @@ export const webinars = pgTable("webinars", {
   startTime: timestamp("start_time").notNull(),
   status: text("status").notNull().default("scheduled"), // scheduled, live, ended
   videoDuration: integer("video_duration").default(0), // in seconds
+  
+  // 排程模式設定
+  scheduleMode: jsonb("schedule_mode").$type<{
+    recurring: boolean;      // 循環排程
+    onDemand: boolean;       // 隨選觀看
+    justInTime: boolean;     // 即時開始（幾分鐘內開始）
+    justInTimeMinutes: number; // 即時開始的分鐘數
+  }>().default({ recurring: false, onDemand: false, justInTime: false, justInTimeMinutes: 15 }),
+  
+  // 循環排程設定
+  recurringSchedule: jsonb("recurring_schedule").$type<{
+    enabled: boolean;
+    days: number[];           // 0-6 (週日-週六)
+    times: string[];          // ["09:00", "14:00", "19:00"]
+    excludeDates: string[];   // 排除的日期
+  }>(),
+  
+  // 時區設定
+  timezone: text("timezone").default("Asia/Taipei"),
+  
+  // 品牌設定
+  brandSettings: jsonb("brand_settings").$type<{
+    logo: string;
+    watermark: string;
+    primaryColor: string;
+    secondaryColor: string;
+    backgroundColor: string;
+  }>(),
+  
+  // 重播設定
+  replayEnabled: boolean("replay_enabled").default(true),
+  replayAvailableHours: integer("replay_available_hours").default(48), // 重播可用時數
+  
+  // Email 設定
+  emailSettings: jsonb("email_settings").$type<{
+    confirmationEnabled: boolean;
+    reminder24hEnabled: boolean;
+    reminder1hEnabled: boolean;
+    followUpEnabled: boolean;
+    customSubject: string;
+    customTemplate: string;
+  }>().default({
+    confirmationEnabled: true,
+    reminder24hEnabled: true,
+    reminder1hEnabled: true,
+    followUpEnabled: true,
+    customSubject: "",
+    customTemplate: ""
+  }),
+  
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertWebinarSchema = createInsertSchema(webinars).omit({ id: true }).extend({
+export const insertWebinarSchema = createInsertSchema(webinars).omit({ id: true, createdAt: true }).extend({
   startTime: z.coerce.date(),
 });
 export type InsertWebinar = z.infer<typeof insertWebinarSchema>;
 export type Webinar = typeof webinars.$inferSelect;
 
-// Registrations (報名)
+// Registrations (報名) - 擴展版
 export const registrations = pgTable("registrations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
@@ -29,9 +80,26 @@ export const registrations = pgTable("registrations", {
   email: text("email").notNull(),
   nickname: text("nickname"),
   registeredAt: timestamp("registered_at").defaultNow(),
+  
+  // 出席追蹤
+  attended: boolean("attended").default(false),
+  attendedAt: timestamp("attended_at"),
+  leftAt: timestamp("left_at"),
+  watchDuration: integer("watch_duration").default(0), // 觀看秒數
+  
+  // 觀眾時區
+  viewerTimezone: text("viewer_timezone"),
+  
+  // 來源追蹤
+  source: text("source"), // utm_source 等
+  
+  // 選擇的場次（用於循環排程）
+  selectedSession: timestamp("selected_session"),
 });
 
-export const insertRegistrationSchema = createInsertSchema(registrations).omit({ id: true, registeredAt: true });
+export const insertRegistrationSchema = createInsertSchema(registrations).omit({ 
+  id: true, registeredAt: true, attended: true, attendedAt: true, leftAt: true, watchDuration: true 
+});
 export type InsertRegistration = z.infer<typeof insertRegistrationSchema>;
 export type Registration = typeof registrations.$inferSelect;
 
@@ -76,6 +144,21 @@ export const insertCtaButtonSchema = createInsertSchema(ctaButtons).omit({ id: t
 export type InsertCtaButton = z.infer<typeof insertCtaButtonSchema>;
 export type CtaButton = typeof ctaButtons.$inferSelect;
 
+// Tips (議程提示)
+export const tips = pgTable("tips", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
+  title: text("title").notNull(),
+  content: text("content"),
+  triggerTime: integer("trigger_time").notNull(), // seconds from video start
+  duration: integer("duration").default(10), // how long to show (seconds)
+  icon: text("icon").default("info"), // info, tip, warning, agenda
+});
+
+export const insertTipSchema = createInsertSchema(tips).omit({ id: true });
+export type InsertTip = z.infer<typeof insertTipSchema>;
+export type Tip = typeof tips.$inferSelect;
+
 // Polls (投票)
 export const polls = pgTable("polls", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -102,6 +185,140 @@ export const pollVotes = pgTable("poll_votes", {
 export const insertPollVoteSchema = createInsertSchema(pollVotes).omit({ id: true, votedAt: true });
 export type InsertPollVote = z.infer<typeof insertPollVoteSchema>;
 export type PollVote = typeof pollVotes.$inferSelect;
+
+// Questions (Q&A 問答)
+export const questions = pgTable("questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
+  registrationId: varchar("registration_id").references(() => registrations.id),
+  askerName: text("asker_name").notNull(),
+  askerEmail: text("asker_email"),
+  question: text("question").notNull(),
+  answer: text("answer"),
+  answeredBy: text("answered_by"),
+  answeredAt: timestamp("answered_at"),
+  isPreset: boolean("is_preset").default(false), // 預設 FAQ
+  displayOrder: integer("display_order").default(0),
+  askedAt: timestamp("asked_at").defaultNow(),
+  isPublic: boolean("is_public").default(true), // 是否公開顯示
+});
+
+export const insertQuestionSchema = createInsertSchema(questions).omit({ 
+  id: true, askedAt: true, answeredAt: true 
+});
+export type InsertQuestion = z.infer<typeof insertQuestionSchema>;
+export type Question = typeof questions.$inferSelect;
+
+// Feedback Surveys (結束問卷)
+export const feedbackSurveys = pgTable("feedback_surveys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
+  title: text("title").notNull().default("請給我們回饋"),
+  questions: jsonb("questions").$type<{
+    id: string;
+    type: "rating" | "text" | "multiChoice";
+    question: string;
+    options?: string[];
+    required: boolean;
+  }[]>().default([]),
+  isActive: boolean("is_active").default(true),
+});
+
+export const insertFeedbackSurveySchema = createInsertSchema(feedbackSurveys).omit({ id: true });
+export type InsertFeedbackSurvey = z.infer<typeof insertFeedbackSurveySchema>;
+export type FeedbackSurvey = typeof feedbackSurveys.$inferSelect;
+
+// Feedback Responses (問卷回覆)
+export const feedbackResponses = pgTable("feedback_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  surveyId: varchar("survey_id").notNull().references(() => feedbackSurveys.id),
+  registrationId: varchar("registration_id").references(() => registrations.id),
+  responses: jsonb("responses").$type<Record<string, any>>().notNull(),
+  submittedAt: timestamp("submitted_at").defaultNow(),
+});
+
+export const insertFeedbackResponseSchema = createInsertSchema(feedbackResponses).omit({ 
+  id: true, submittedAt: true 
+});
+export type InsertFeedbackResponse = z.infer<typeof insertFeedbackResponseSchema>;
+export type FeedbackResponse = typeof feedbackResponses.$inferSelect;
+
+// Viewer Progress (觀看進度)
+export const viewerProgress = pgTable("viewer_progress", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
+  registrationId: varchar("registration_id").references(() => registrations.id),
+  viewerSessionId: text("viewer_session_id").notNull(), // 瀏覽器 session ID
+  lastPosition: integer("last_position").default(0), // 上次觀看位置 (秒)
+  totalWatched: integer("total_watched").default(0), // 總觀看時間 (秒)
+  watchedRanges: jsonb("watched_ranges").$type<{start: number; end: number}[]>().default([]),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertViewerProgressSchema = createInsertSchema(viewerProgress).omit({ 
+  id: true, updatedAt: true 
+});
+export type InsertViewerProgress = z.infer<typeof insertViewerProgressSchema>;
+export type ViewerProgress = typeof viewerProgress.$inferSelect;
+
+// Webinar Analytics (數據分析)
+export const webinarAnalytics = pgTable("webinar_analytics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
+  sessionDate: timestamp("session_date").notNull(),
+  
+  // 流量數據
+  pageViews: integer("page_views").default(0),
+  registrations: integer("registrations").default(0),
+  registrationRate: real("registration_rate").default(0), // 報名率 %
+  
+  // 出席數據
+  attendees: integer("attendees").default(0),
+  attendanceRate: real("attendance_rate").default(0), // 出席率 %
+  
+  // 觀看數據
+  avgWatchTime: integer("avg_watch_time").default(0), // 平均觀看秒數
+  avgWatchPercent: real("avg_watch_percent").default(0), // 平均觀看比例 %
+  
+  // 互動數據
+  chatMessages: integer("chat_messages").default(0),
+  likes: integer("likes").default(0),
+  pollParticipation: real("poll_participation").default(0), // 投票參與率 %
+  questionsAsked: integer("questions_asked").default(0),
+  ctaClicks: integer("cta_clicks").default(0),
+  
+  // 轉換數據
+  ctaConversionRate: real("cta_conversion_rate").default(0),
+  
+  // 觀眾流失分析 (每10秒的觀看人數)
+  viewerRetention: jsonb("viewer_retention").$type<number[]>().default([]),
+  
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertWebinarAnalyticsSchema = createInsertSchema(webinarAnalytics).omit({ 
+  id: true, updatedAt: true 
+});
+export type InsertWebinarAnalytics = z.infer<typeof insertWebinarAnalyticsSchema>;
+export type WebinarAnalytics = typeof webinarAnalytics.$inferSelect;
+
+// Email Reminders (Email 提醒排程)
+export const emailReminders = pgTable("email_reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
+  registrationId: varchar("registration_id").notNull().references(() => registrations.id),
+  reminderType: text("reminder_type").notNull(), // confirmation, reminder_24h, reminder_1h, followup
+  scheduledFor: timestamp("scheduled_for").notNull(),
+  sentAt: timestamp("sent_at"),
+  status: text("status").notNull().default("pending"), // pending, sent, failed
+  errorMessage: text("error_message"),
+});
+
+export const insertEmailReminderSchema = createInsertSchema(emailReminders).omit({ 
+  id: true, sentAt: true, errorMessage: true 
+});
+export type InsertEmailReminder = z.infer<typeof insertEmailReminderSchema>;
+export type EmailReminder = typeof emailReminders.$inferSelect;
 
 // Chat Messages (即時聊天)
 export const chatMessages = pgTable("chat_messages", {
@@ -142,3 +359,17 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// Webinar Sessions (用於循環排程的場次)
+export const webinarSessions = pgTable("webinar_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
+  scheduledStart: timestamp("scheduled_start").notNull(),
+  scheduledEnd: timestamp("scheduled_end"),
+  status: text("status").notNull().default("scheduled"), // scheduled, live, ended, cancelled
+  attendeeCount: integer("attendee_count").default(0),
+});
+
+export const insertWebinarSessionSchema = createInsertSchema(webinarSessions).omit({ id: true });
+export type InsertWebinarSession = z.infer<typeof insertWebinarSessionSchema>;
+export type WebinarSession = typeof webinarSessions.$inferSelect;

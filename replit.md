@@ -41,8 +41,8 @@
 ## 資料庫結構
 
 ### Tables
-- `webinars` - 直播間資訊
-- `registrations` - 報名記錄
+- `webinars` - 直播間資訊（含排程模式、時區、品牌設定）
+- `registrations` - 報名記錄（含出席追蹤、觀看時長）
 - `fake_users` - 假人角色
 - `scheduled_messages` - 預排訊息
 - `cta_buttons` - CTA 按鈕
@@ -51,6 +51,14 @@
 - `chat_messages` - 聊天訊息
 - `likes` - 按讚統計
 - `users` - 管理員帳號
+- `tips` - 小提示卡（按時間觸發）
+- `questions` - 觀眾問答 Q&A
+- `feedback_surveys` - 回饋問卷
+- `feedback_responses` - 問卷回應
+- `viewer_progress` - 觀看進度追蹤
+- `webinar_analytics` - 統計分析數據
+- `email_reminders` - 郵件提醒設定
+- `webinar_sessions` - 直播場次管理
 
 ## 頁面路由
 
@@ -98,6 +106,39 @@
 - `GET /api/webinars/:id/polls` - 取得投票列表
 - `POST /api/webinars/:id/polls` - 新增投票（需認證）
 - `DELETE /api/webinars/:id/polls/:pollId` - 刪除投票（需認證）
+
+### 小提示卡
+- `GET /api/webinars/:id/tips` - 取得提示列表
+- `POST /api/webinars/:id/tips` - 新增提示（需認證）
+- `DELETE /api/webinars/:id/tips/:tipId` - 刪除提示（需認證）
+
+### 觀眾問答 (Q&A)
+- `GET /api/webinars/:id/questions` - 取得問題列表
+- `POST /api/webinars/:id/questions` - 新增問題
+- `PATCH /api/webinars/:id/questions/:questionId` - 回覆問題（需認證）
+- `DELETE /api/webinars/:id/questions/:questionId` - 刪除問題（需認證）
+
+### 回饋問卷
+- `GET /api/webinars/:id/feedback-survey` - 取得問卷
+- `POST /api/webinars/:id/feedback-survey` - 建立問卷（需認證）
+- `PATCH /api/webinars/:id/feedback-survey/:surveyId` - 更新問卷（需認證）
+- `POST /api/feedback-responses` - 提交回應
+- `GET /api/feedback-surveys/:surveyId/responses` - 取得回應（需認證）
+
+### 觀看進度
+- `GET /api/webinars/:id/progress/:sessionId` - 取得觀看進度
+- `POST /api/webinars/:id/progress` - 更新觀看進度
+
+### 統計分析
+- `GET /api/webinars/:id/analytics` - 取得分析數據（需認證）
+
+### 直播場次
+- `GET /api/webinars/:id/sessions` - 取得場次列表
+- `POST /api/webinars/:id/sessions` - 新增場次（需認證）
+
+### 出席追蹤
+- `POST /api/registrations/:id/attend` - 標記出席
+- `POST /api/registrations/:id/leave` - 標記離開
 
 ## WebSocket 訊息類型
 

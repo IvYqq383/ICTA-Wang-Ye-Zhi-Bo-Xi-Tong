@@ -1,16 +1,24 @@
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, lt, lte, desc, asc } from "drizzle-orm";
 import {
-  webinars, insertWebinarSchema, type InsertWebinar, type Webinar,
+  webinars, type InsertWebinar, type Webinar,
   registrations, type InsertRegistration, type Registration,
   fakeUsers, type InsertFakeUser, type FakeUser,
   scheduledMessages, type InsertScheduledMessage, type ScheduledMessage,
   ctaButtons, type InsertCtaButton, type CtaButton,
+  tips, type InsertTip, type Tip,
   polls, type InsertPoll, type Poll,
   pollVotes, type InsertPollVote, type PollVote,
+  questions, type InsertQuestion, type Question,
+  feedbackSurveys, type InsertFeedbackSurvey, type FeedbackSurvey,
+  feedbackResponses, type InsertFeedbackResponse, type FeedbackResponse,
+  viewerProgress, type InsertViewerProgress, type ViewerProgress,
+  webinarAnalytics, type InsertWebinarAnalytics, type WebinarAnalytics,
+  emailReminders, type InsertEmailReminder, type EmailReminder,
   chatMessages, type InsertChatMessage, type ChatMessage,
   likes, type InsertLike, type Like,
   users, type InsertUser, type User,
+  webinarSessions, type InsertWebinarSession, type WebinarSession,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -28,8 +36,10 @@ export interface IStorage {
   
   // Registrations
   createRegistration(data: InsertRegistration): Promise<Registration>;
+  getRegistration(id: string): Promise<Registration | undefined>;
   getRegistrationsByWebinar(webinarId: string): Promise<Registration[]>;
   getRegistrationByEmail(webinarId: string, email: string): Promise<Registration | undefined>;
+  updateRegistration(id: string, data: Partial<Registration>): Promise<Registration | undefined>;
   
   // Fake Users
   createFakeUser(data: InsertFakeUser): Promise<FakeUser>;
@@ -46,6 +56,11 @@ export interface IStorage {
   getCtaButtonsByWebinar(webinarId: string): Promise<CtaButton[]>;
   deleteCtaButton(id: string): Promise<void>;
   
+  // Tips
+  createTip(data: InsertTip): Promise<Tip>;
+  getTipsByWebinar(webinarId: string): Promise<Tip[]>;
+  deleteTip(id: string): Promise<void>;
+  
   // Polls
   createPoll(data: InsertPoll): Promise<Poll>;
   getPollsByWebinar(webinarId: string): Promise<Poll[]>;
@@ -56,6 +71,35 @@ export interface IStorage {
   createPollVote(data: InsertPollVote): Promise<PollVote>;
   getPollVotes(pollId: string): Promise<PollVote[]>;
   
+  // Questions (Q&A)
+  createQuestion(data: InsertQuestion): Promise<Question>;
+  getQuestionsByWebinar(webinarId: string): Promise<Question[]>;
+  getPresetQuestions(webinarId: string): Promise<Question[]>;
+  updateQuestion(id: string, data: Partial<Question>): Promise<Question | undefined>;
+  deleteQuestion(id: string): Promise<void>;
+  
+  // Feedback Surveys
+  createFeedbackSurvey(data: InsertFeedbackSurvey): Promise<FeedbackSurvey>;
+  getFeedbackSurveyByWebinar(webinarId: string): Promise<FeedbackSurvey | undefined>;
+  updateFeedbackSurvey(id: string, data: Partial<FeedbackSurvey>): Promise<FeedbackSurvey | undefined>;
+  
+  // Feedback Responses
+  createFeedbackResponse(data: InsertFeedbackResponse): Promise<FeedbackResponse>;
+  getFeedbackResponsesBySurvey(surveyId: string): Promise<FeedbackResponse[]>;
+  
+  // Viewer Progress
+  getViewerProgress(webinarId: string, sessionId: string): Promise<ViewerProgress | undefined>;
+  upsertViewerProgress(data: InsertViewerProgress): Promise<ViewerProgress>;
+  
+  // Analytics
+  getWebinarAnalytics(webinarId: string): Promise<WebinarAnalytics[]>;
+  upsertWebinarAnalytics(data: InsertWebinarAnalytics): Promise<WebinarAnalytics>;
+  
+  // Email Reminders
+  createEmailReminder(data: InsertEmailReminder): Promise<EmailReminder>;
+  getPendingEmailReminders(before: Date): Promise<EmailReminder[]>;
+  updateEmailReminder(id: string, data: Partial<EmailReminder>): Promise<void>;
+  
   // Chat Messages
   createChatMessage(data: InsertChatMessage): Promise<ChatMessage>;
   getChatMessagesByWebinar(webinarId: string): Promise<ChatMessage[]>;
@@ -63,6 +107,12 @@ export interface IStorage {
   // Likes
   getLikes(webinarId: string): Promise<Like | undefined>;
   incrementLikes(webinarId: string): Promise<number>;
+  
+  // Webinar Sessions
+  createWebinarSession(data: InsertWebinarSession): Promise<WebinarSession>;
+  getWebinarSessions(webinarId: string): Promise<WebinarSession[]>;
+  getUpcomingSessions(webinarId: string): Promise<WebinarSession[]>;
+  updateWebinarSession(id: string, data: Partial<WebinarSession>): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -84,7 +134,7 @@ export class DatabaseStorage implements IStorage {
 
   // Webinars
   async createWebinar(data: InsertWebinar): Promise<Webinar> {
-    const result = await db.insert(webinars).values(data).returning();
+    const result = await db.insert(webinars).values(data as any).returning();
     return result[0];
   }
 
@@ -94,11 +144,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllWebinars(): Promise<Webinar[]> {
-    return db.select().from(webinars);
+    return db.select().from(webinars).orderBy(desc(webinars.createdAt));
   }
 
   async updateWebinar(id: string, data: Partial<InsertWebinar>): Promise<Webinar | undefined> {
-    const result = await db.update(webinars).set(data).where(eq(webinars.id, id)).returning();
+    const result = await db.update(webinars).set(data as any).where(eq(webinars.id, id)).returning();
     return result[0];
   }
 
@@ -112,6 +162,11 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
+  async getRegistration(id: string): Promise<Registration | undefined> {
+    const result = await db.select().from(registrations).where(eq(registrations.id, id));
+    return result[0];
+  }
+
   async getRegistrationsByWebinar(webinarId: string): Promise<Registration[]> {
     return db.select().from(registrations).where(eq(registrations.webinarId, webinarId));
   }
@@ -119,6 +174,11 @@ export class DatabaseStorage implements IStorage {
   async getRegistrationByEmail(webinarId: string, email: string): Promise<Registration | undefined> {
     const result = await db.select().from(registrations)
       .where(and(eq(registrations.webinarId, webinarId), eq(registrations.email, email)));
+    return result[0];
+  }
+
+  async updateRegistration(id: string, data: Partial<Registration>): Promise<Registration | undefined> {
+    const result = await db.update(registrations).set(data).where(eq(registrations.id, id)).returning();
     return result[0];
   }
 
@@ -143,7 +203,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getScheduledMessagesByWebinar(webinarId: string): Promise<ScheduledMessage[]> {
-    return db.select().from(scheduledMessages).where(eq(scheduledMessages.webinarId, webinarId));
+    return db.select().from(scheduledMessages)
+      .where(eq(scheduledMessages.webinarId, webinarId))
+      .orderBy(asc(scheduledMessages.triggerTime));
   }
 
   async deleteScheduledMessage(id: string): Promise<void> {
@@ -157,11 +219,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCtaButtonsByWebinar(webinarId: string): Promise<CtaButton[]> {
-    return db.select().from(ctaButtons).where(eq(ctaButtons.webinarId, webinarId));
+    return db.select().from(ctaButtons)
+      .where(eq(ctaButtons.webinarId, webinarId))
+      .orderBy(asc(ctaButtons.startTime));
   }
 
   async deleteCtaButton(id: string): Promise<void> {
     await db.delete(ctaButtons).where(eq(ctaButtons.id, id));
+  }
+
+  // Tips
+  async createTip(data: InsertTip): Promise<Tip> {
+    const result = await db.insert(tips).values(data).returning();
+    return result[0];
+  }
+
+  async getTipsByWebinar(webinarId: string): Promise<Tip[]> {
+    return db.select().from(tips)
+      .where(eq(tips.webinarId, webinarId))
+      .orderBy(asc(tips.triggerTime));
+  }
+
+  async deleteTip(id: string): Promise<void> {
+    await db.delete(tips).where(eq(tips.id, id));
   }
 
   // Polls
@@ -174,7 +254,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPollsByWebinar(webinarId: string): Promise<Poll[]> {
-    return db.select().from(polls).where(eq(polls.webinarId, webinarId));
+    return db.select().from(polls)
+      .where(eq(polls.webinarId, webinarId))
+      .orderBy(asc(polls.triggerTime));
   }
 
   async getPoll(id: string): Promise<Poll | undefined> {
@@ -196,6 +278,113 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(pollVotes).where(eq(pollVotes.pollId, pollId));
   }
 
+  // Questions (Q&A)
+  async createQuestion(data: InsertQuestion): Promise<Question> {
+    const result = await db.insert(questions).values(data).returning();
+    return result[0];
+  }
+
+  async getQuestionsByWebinar(webinarId: string): Promise<Question[]> {
+    return db.select().from(questions)
+      .where(eq(questions.webinarId, webinarId))
+      .orderBy(desc(questions.askedAt));
+  }
+
+  async getPresetQuestions(webinarId: string): Promise<Question[]> {
+    return db.select().from(questions)
+      .where(and(eq(questions.webinarId, webinarId), eq(questions.isPreset, true)))
+      .orderBy(asc(questions.displayOrder));
+  }
+
+  async updateQuestion(id: string, data: Partial<Question>): Promise<Question | undefined> {
+    const result = await db.update(questions).set(data).where(eq(questions.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteQuestion(id: string): Promise<void> {
+    await db.delete(questions).where(eq(questions.id, id));
+  }
+
+  // Feedback Surveys
+  async createFeedbackSurvey(data: InsertFeedbackSurvey): Promise<FeedbackSurvey> {
+    const result = await db.insert(feedbackSurveys).values(data as any).returning();
+    return result[0];
+  }
+
+  async getFeedbackSurveyByWebinar(webinarId: string): Promise<FeedbackSurvey | undefined> {
+    const result = await db.select().from(feedbackSurveys)
+      .where(eq(feedbackSurveys.webinarId, webinarId));
+    return result[0];
+  }
+
+  async updateFeedbackSurvey(id: string, data: Partial<FeedbackSurvey>): Promise<FeedbackSurvey | undefined> {
+    const result = await db.update(feedbackSurveys).set(data).where(eq(feedbackSurveys.id, id)).returning();
+    return result[0];
+  }
+
+  // Feedback Responses
+  async createFeedbackResponse(data: InsertFeedbackResponse): Promise<FeedbackResponse> {
+    const result = await db.insert(feedbackResponses).values(data).returning();
+    return result[0];
+  }
+
+  async getFeedbackResponsesBySurvey(surveyId: string): Promise<FeedbackResponse[]> {
+    return db.select().from(feedbackResponses).where(eq(feedbackResponses.surveyId, surveyId));
+  }
+
+  // Viewer Progress
+  async getViewerProgress(webinarId: string, sessionId: string): Promise<ViewerProgress | undefined> {
+    const result = await db.select().from(viewerProgress)
+      .where(and(
+        eq(viewerProgress.webinarId, webinarId),
+        eq(viewerProgress.viewerSessionId, sessionId)
+      ));
+    return result[0];
+  }
+
+  async upsertViewerProgress(data: InsertViewerProgress): Promise<ViewerProgress> {
+    const existing = await this.getViewerProgress(data.webinarId, data.viewerSessionId);
+    if (existing) {
+      const result = await db.update(viewerProgress)
+        .set({ ...data, updatedAt: new Date() } as any)
+        .where(eq(viewerProgress.id, existing.id))
+        .returning();
+      return result[0];
+    }
+    const result = await db.insert(viewerProgress).values(data as any).returning();
+    return result[0];
+  }
+
+  // Analytics
+  async getWebinarAnalytics(webinarId: string): Promise<WebinarAnalytics[]> {
+    return db.select().from(webinarAnalytics)
+      .where(eq(webinarAnalytics.webinarId, webinarId))
+      .orderBy(desc(webinarAnalytics.sessionDate));
+  }
+
+  async upsertWebinarAnalytics(data: InsertWebinarAnalytics): Promise<WebinarAnalytics> {
+    const result = await db.insert(webinarAnalytics).values(data as any).returning();
+    return result[0];
+  }
+
+  // Email Reminders
+  async createEmailReminder(data: InsertEmailReminder): Promise<EmailReminder> {
+    const result = await db.insert(emailReminders).values(data).returning();
+    return result[0];
+  }
+
+  async getPendingEmailReminders(before: Date): Promise<EmailReminder[]> {
+    return db.select().from(emailReminders)
+      .where(and(
+        eq(emailReminders.status, "pending"),
+        lte(emailReminders.scheduledFor, before)
+      ));
+  }
+
+  async updateEmailReminder(id: string, data: Partial<EmailReminder>): Promise<void> {
+    await db.update(emailReminders).set(data).where(eq(emailReminders.id, id));
+  }
+
   // Chat Messages
   async createChatMessage(data: InsertChatMessage): Promise<ChatMessage> {
     const result = await db.insert(chatMessages).values(data).returning();
@@ -203,7 +392,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getChatMessagesByWebinar(webinarId: string): Promise<ChatMessage[]> {
-    return db.select().from(chatMessages).where(eq(chatMessages.webinarId, webinarId));
+    return db.select().from(chatMessages)
+      .where(eq(chatMessages.webinarId, webinarId))
+      .orderBy(asc(chatMessages.sentAt));
   }
 
   // Likes
@@ -223,6 +414,31 @@ export class DatabaseStorage implements IStorage {
       .where(eq(likes.webinarId, webinarId))
       .returning();
     return result[0].count;
+  }
+
+  // Webinar Sessions
+  async createWebinarSession(data: InsertWebinarSession): Promise<WebinarSession> {
+    const result = await db.insert(webinarSessions).values(data).returning();
+    return result[0];
+  }
+
+  async getWebinarSessions(webinarId: string): Promise<WebinarSession[]> {
+    return db.select().from(webinarSessions)
+      .where(eq(webinarSessions.webinarId, webinarId))
+      .orderBy(asc(webinarSessions.scheduledStart));
+  }
+
+  async getUpcomingSessions(webinarId: string): Promise<WebinarSession[]> {
+    return db.select().from(webinarSessions)
+      .where(and(
+        eq(webinarSessions.webinarId, webinarId),
+        eq(webinarSessions.status, "scheduled")
+      ))
+      .orderBy(asc(webinarSessions.scheduledStart));
+  }
+
+  async updateWebinarSession(id: string, data: Partial<WebinarSession>): Promise<void> {
+    await db.update(webinarSessions).set(data).where(eq(webinarSessions.id, id));
   }
 }
 
