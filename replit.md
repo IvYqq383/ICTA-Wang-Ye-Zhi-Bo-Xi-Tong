@@ -7,6 +7,12 @@
 - 品牌名稱：ICTA-WEBINAR（前身 LiveCast）
 - Widget JS 同時支援 `window.ICTA_WEBINAR` 和 `window.LiveCast`（向下相容）
 
+## 多語系 (i18n)
+- 首頁支援三種語言：繁體中文 (zh-TW)、簡體中文 (zh-CN)、英文 (en)
+- 語言選擇存儲於 localStorage（key: `icta-lang`），預設為繁體中文
+- 所有首頁文字、SEO meta tags、OG tags 會隨語言切換更新
+- 語言切換器位於導航列右側（Languages 圖標按鈕）
+
 ## 多租戶架構
 - **用戶註冊**：bcrypt 密碼雜湊（10 rounds），支援 username/email/password/companyName
 - **Session 管理**：session 存 userId，非 isAdmin boolean
