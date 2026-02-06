@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   Plus, Video, Users, Calendar, Settings, Play, 
-  ExternalLink, Loader2, LogOut, Radio 
+  ExternalLink, Loader2, LogOut, Radio, Copy
 } from "lucide-react";
 import type { Webinar } from "@shared/schema";
 
@@ -72,6 +72,19 @@ export default function AdminDashboard() {
         description: error.message,
         variant: "destructive",
       });
+    },
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (webinarId: string) => {
+      return apiRequest("POST", `/api/webinars/${webinarId}/duplicate`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars"] });
+      toast({ title: "複製成功", description: "直播間已複製" });
+    },
+    onError: (error: any) => {
+      toast({ title: "複製失敗", description: error.message, variant: "destructive" });
     },
   });
 
@@ -276,6 +289,19 @@ export default function AdminDashboard() {
                     >
                       <Radio className="h-3 w-3 mr-1" />
                       控制台
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        duplicateMutation.mutate(webinar.id);
+                      }}
+                      disabled={duplicateMutation.isPending}
+                      data-testid={`button-duplicate-${webinar.id}`}
+                    >
+                      <Copy className="h-3 w-3 mr-1" />
+                      複製
                     </Button>
                   </div>
                 </CardContent>

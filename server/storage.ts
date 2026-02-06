@@ -154,6 +154,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteWebinar(id: string): Promise<void> {
+    // Delete in order respecting FK constraints
+    // First: tables referencing polls (pollVotes)
+    const webinarPolls = await db.select({ id: polls.id }).from(polls).where(eq(polls.webinarId, id));
+    for (const poll of webinarPolls) {
+      await db.delete(pollVotes).where(eq(pollVotes.pollId, poll.id));
+    }
+    // Tables referencing feedbackSurveys (feedbackResponses)
+    const surveys = await db.select({ id: feedbackSurveys.id }).from(feedbackSurveys).where(eq(feedbackSurveys.webinarId, id));
+    for (const survey of surveys) {
+      await db.delete(feedbackResponses).where(eq(feedbackResponses.surveyId, survey.id));
+    }
+    // Tables referencing registrations (emailReminders, viewerProgress, questions with registrationId)
+    await db.delete(emailReminders).where(eq(emailReminders.webinarId, id));
+    await db.delete(viewerProgress).where(eq(viewerProgress.webinarId, id));
+    await db.delete(questions).where(eq(questions.webinarId, id));
+    // Now delete registrations
+    await db.delete(registrations).where(eq(registrations.webinarId, id));
+    // Delete other direct children
+    await db.delete(scheduledMessages).where(eq(scheduledMessages.webinarId, id));
+    await db.delete(fakeUsers).where(eq(fakeUsers.webinarId, id));
+    await db.delete(ctaButtons).where(eq(ctaButtons.webinarId, id));
+    await db.delete(polls).where(eq(polls.webinarId, id));
+    await db.delete(tips).where(eq(tips.webinarId, id));
+    await db.delete(feedbackSurveys).where(eq(feedbackSurveys.webinarId, id));
+    await db.delete(chatMessages).where(eq(chatMessages.webinarId, id));
+    await db.delete(likes).where(eq(likes.webinarId, id));
+    await db.delete(webinarAnalytics).where(eq(webinarAnalytics.webinarId, id));
+    await db.delete(webinarSessions).where(eq(webinarSessions.webinarId, id));
+    // Finally delete the webinar
     await db.delete(webinars).where(eq(webinars.id, id));
   }
 

@@ -452,11 +452,21 @@ export default function WebinarRoom() {
     );
   }
 
+  const brandSettings = webinar.brandSettings as { logo?: string; primaryColor?: string; secondaryColor?: string; backgroundColor?: string } | null;
+  const brandGradient = brandSettings?.primaryColor && brandSettings?.secondaryColor
+    ? { background: `linear-gradient(135deg, ${brandSettings.primaryColor} 0%, ${brandSettings.secondaryColor} 100%)` }
+    : undefined;
+
   if (!isJoined) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4" style={brandGradient || { background: "linear-gradient(135deg, #4338ca 0%, #7e22ce 50%, #be185d 100%)" }}>
         <Card className="max-w-md w-full">
           <CardContent className="pt-6">
+            {brandSettings?.logo && (
+              <div className="flex justify-center mb-4">
+                <img src={brandSettings.logo} alt="Logo" className="max-h-12 object-contain" />
+              </div>
+            )}
             <h2 className="text-xl font-bold text-center mb-2">{webinar.title}</h2>
             {!isOnDemand && (
               <p className="text-center text-sm text-muted-foreground mb-1">
@@ -494,9 +504,14 @@ export default function WebinarRoom() {
 
   if (waitingForStart) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4" style={brandGradient || { background: "linear-gradient(135deg, #4338ca 0%, #7e22ce 50%, #be185d 100%)" }}>
         <Card className="max-w-lg w-full">
           <CardContent className="pt-8 pb-8 text-center">
+            {brandSettings?.logo && (
+              <div className="flex justify-center mb-4">
+                <img src={brandSettings.logo} alt="Logo" className="max-h-12 object-contain" />
+              </div>
+            )}
             <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
               <Clock className="h-10 w-10 text-primary" />
             </div>

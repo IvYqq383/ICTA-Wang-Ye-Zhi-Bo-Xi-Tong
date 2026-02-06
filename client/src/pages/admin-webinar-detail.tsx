@@ -19,12 +19,15 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   ArrowLeft, Plus, Users, MessageSquare, MousePointerClick, 
   BarChart, Trash2, Loader2, Clock, Radio, Copy, ExternalLink,
-  Lightbulb, HelpCircle, Star, TrendingUp, Settings, Code
+  Lightbulb, HelpCircle, Star, TrendingUp, Settings, Code,
+  Mail, Palette, Calendar, Edit, Save, RefreshCw, FileText, Eye
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import type { Webinar, FakeUser, ScheduledMessage, CtaButton, Poll, Registration, Tip, Question, FeedbackSurvey } from "@shared/schema";
+import type { FeedbackResponse } from "@shared/schema";
 
 // Analytics Response Type
 interface AnalyticsResponse {
@@ -103,6 +106,33 @@ export default function AdminWebinarDetail() {
   const [settingsReplayEnabled, setSettingsReplayEnabled] = useState(true);
   const [settingsReplayHours, setSettingsReplayHours] = useState("48");
 
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editVimeoUrl, setEditVimeoUrl] = useState("");
+  const [editStartTime, setEditStartTime] = useState("");
+  const [editCoverImage, setEditCoverImage] = useState("");
+
+  // Brand settings state
+  const [brandLogo, setBrandLogo] = useState("");
+  const [brandPrimaryColor, setBrandPrimaryColor] = useState("#667eea");
+  const [brandSecondaryColor, setBrandSecondaryColor] = useState("#764ba2");
+  const [brandBackgroundColor, setBrandBackgroundColor] = useState("#1a1a2e");
+
+  // Email settings state
+  const [emailConfirmation, setEmailConfirmation] = useState(true);
+  const [emailReminder24h, setEmailReminder24h] = useState(true);
+  const [emailReminder1h, setEmailReminder1h] = useState(true);
+  const [emailFollowUp, setEmailFollowUp] = useState(true);
+  const [emailCustomSubject, setEmailCustomSubject] = useState("");
+  const [emailCustomTemplate, setEmailCustomTemplate] = useState("");
+
+  // Recurring schedule state
+  const [recurringEnabled, setRecurringEnabled] = useState(false);
+  const [recurringDays, setRecurringDays] = useState<number[]>([]);
+  const [recurringTimes, setRecurringTimes] = useState("");
+  const [recurringExcludeDates, setRecurringExcludeDates] = useState("");
+
   // Queries
   const { data: webinar, isLoading: webinarLoading } = useQuery<Webinar>({
     queryKey: ["/api/webinars", id],
@@ -154,6 +184,11 @@ export default function AdminWebinarDetail() {
     enabled: !!id,
   });
 
+  const { data: feedbackResponses } = useQuery<FeedbackResponse[]>({
+    queryKey: ["/api/feedback-surveys", feedbackSurvey?.id, "responses"],
+    enabled: !!feedbackSurvey?.id,
+  });
+
   useEffect(() => {
     if (webinar) {
       const sm = webinar.scheduleMode as any;
@@ -168,6 +203,42 @@ export default function AdminWebinarDetail() {
       setSettingsTimezone(webinar.timezone || "Asia/Taipei");
       setSettingsReplayEnabled(webinar.replayEnabled ?? true);
       setSettingsReplayHours(String(webinar.replayAvailableHours ?? 48));
+
+      // Initialize edit info
+      setEditTitle(webinar.title);
+      setEditDescription(webinar.description || "");
+      setEditVimeoUrl(webinar.vimeoUrl);
+      setEditStartTime(new Date(webinar.startTime).toISOString().slice(0, 16));
+      setEditCoverImage(webinar.coverImage || "");
+
+      // Initialize brand settings
+      const bs = webinar.brandSettings as any;
+      if (bs) {
+        setBrandLogo(bs.logo || "");
+        setBrandPrimaryColor(bs.primaryColor || "#667eea");
+        setBrandSecondaryColor(bs.secondaryColor || "#764ba2");
+        setBrandBackgroundColor(bs.backgroundColor || "#1a1a2e");
+      }
+
+      // Initialize email settings
+      const es = webinar.emailSettings as any;
+      if (es) {
+        setEmailConfirmation(es.confirmationEnabled ?? true);
+        setEmailReminder24h(es.reminder24hEnabled ?? true);
+        setEmailReminder1h(es.reminder1hEnabled ?? true);
+        setEmailFollowUp(es.followUpEnabled ?? true);
+        setEmailCustomSubject(es.customSubject || "");
+        setEmailCustomTemplate(es.customTemplate || "");
+      }
+
+      // Initialize recurring schedule
+      const rs = webinar.recurringSchedule as any;
+      if (rs) {
+        setRecurringEnabled(rs.enabled ?? false);
+        setRecurringDays(rs.days || []);
+        setRecurringTimes((rs.times || []).join(", "));
+        setRecurringExcludeDates((rs.excludeDates || []).join(", "));
+      }
     }
   }, [webinar]);
 
@@ -359,8 +430,79 @@ export default function AdminWebinarDetail() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex-1">
-            <h1 className="text-lg font-bold">{webinar.title}</h1>
-            <p className="text-sm text-muted-foreground">直播間設定</p>
+            {isEditingInfo ? (
+              <div className="space-y-2">
+                <Input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="直播標題"
+                  data-testid="input-edit-title"
+                />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Input
+                    value={editVimeoUrl}
+                    onChange={(e) => setEditVimeoUrl(e.target.value)}
+                    placeholder="Vimeo 網址"
+                    className="flex-1 min-w-[200px]"
+                    data-testid="input-edit-vimeo"
+                  />
+                  <Input
+                    type="datetime-local"
+                    value={editStartTime}
+                    onChange={(e) => setEditStartTime(e.target.value)}
+                    className="w-auto"
+                    data-testid="input-edit-start-time"
+                  />
+                </div>
+                <Textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="直播描述（選填）"
+                  className="resize-none"
+                  rows={2}
+                  data-testid="input-edit-description"
+                />
+                <Input
+                  value={editCoverImage}
+                  onChange={(e) => setEditCoverImage(e.target.value)}
+                  placeholder="封面圖片網址（選填）"
+                  data-testid="input-edit-cover"
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      updateWebinar.mutate({
+                        title: editTitle,
+                        description: editDescription || null,
+                        vimeoUrl: editVimeoUrl,
+                        startTime: new Date(editStartTime).toISOString(),
+                        coverImage: editCoverImage || null,
+                      });
+                      setIsEditingInfo(false);
+                    }}
+                    disabled={updateWebinar.isPending || !editTitle || !editVimeoUrl}
+                    data-testid="button-save-info"
+                  >
+                    <Save className="h-4 w-4 mr-1" />
+                    儲存
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setIsEditingInfo(false)}>
+                    取消
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div>
+                  <h1 className="text-lg font-bold">{webinar.title}</h1>
+                  <p className="text-sm text-muted-foreground">直播間設定</p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setIsEditingInfo(true)} data-testid="button-edit-info">
+                  <Edit className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
           <Button onClick={() => setLocation(`/admin/webinar/${id}/control`)} data-testid="button-go-control">
             <Radio className="h-4 w-4 mr-2" />
@@ -1128,72 +1270,167 @@ export default function AdminWebinarDetail() {
 
           {/* Survey Tab */}
           <TabsContent value="survey">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">回饋問卷</CardTitle>
-                <CardDescription>直播結束後向觀眾收集回饋</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {feedbackSurvey ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium">{feedbackSurvey.title}</span>
-                      <Badge variant={feedbackSurvey.isActive ? "default" : "secondary"}>
-                        {feedbackSurvey.isActive ? "啟用中" : "已停用"}
-                      </Badge>
-                    </div>
-                    {feedbackSurvey.questions && (feedbackSurvey.questions as any[]).length > 0 && (
-                      <div className="space-y-2">
-                        {(feedbackSurvey.questions as any[]).map((q: any, i: number) => (
-                          <div key={q.id || i} className="p-3 bg-muted rounded-md">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge variant="outline" className="text-xs">
-                                {q.type === "rating" ? "評分" : q.type === "text" ? "文字" : "選擇"}
-                              </Badge>
-                              {q.required && <Badge variant="secondary" className="text-xs">必填</Badge>}
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">回饋問卷</CardTitle>
+                  <CardDescription>直播結束後向觀眾收集回饋</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {feedbackSurvey ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">{feedbackSurvey.title}</span>
+                        <Badge variant={feedbackSurvey.isActive ? "default" : "secondary"}>
+                          {feedbackSurvey.isActive ? "啟用中" : "已停用"}
+                        </Badge>
+                      </div>
+                      {feedbackSurvey.questions && (feedbackSurvey.questions as any[]).length > 0 && (
+                        <div className="space-y-2">
+                          {(feedbackSurvey.questions as any[]).map((q: any, i: number) => (
+                            <div key={q.id || i} className="p-3 bg-muted rounded-md">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant="outline" className="text-xs">
+                                  {q.type === "rating" ? "評分" : q.type === "text" ? "文字" : "選擇"}
+                                </Badge>
+                                {q.required && <Badge variant="secondary" className="text-xs">必填</Badge>}
+                              </div>
+                              <p className="text-sm">{q.question}</p>
+                              {q.options && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {q.options.map((opt: string, oi: number) => (
+                                    <Badge key={oi} variant="outline" className="text-xs">{opt}</Badge>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                            <p className="text-sm">{q.question}</p>
-                            {q.options && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {q.options.map((opt: string, oi: number) => (
-                                  <Badge key={oi} variant="outline" className="text-xs">{opt}</Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground mb-4">尚未設定問卷</p>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          apiRequest("POST", `/api/webinars/${id}/feedback-survey`, {
+                            webinarId: id,
+                            title: "請給我們回饋",
+                            questions: [
+                              { id: "q1", type: "rating", question: "您對本次直播的整體評價？", required: true },
+                              { id: "q2", type: "text", question: "您最喜歡哪個部分？", required: false },
+                              { id: "q3", type: "multiChoice", question: "您會推薦給朋友嗎？", options: ["一定會", "可能會", "不確定", "不會"], required: true },
+                            ],
+                            isActive: true,
+                          }).then(() => {
+                            queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "feedback-survey"] });
+                            toast({ title: "預設問卷已建立" });
+                          });
+                        }}
+                        data-testid="button-create-default-survey"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        建立預設問卷
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {feedbackSurvey && feedbackResponses && feedbackResponses.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">問卷回覆統計</CardTitle>
+                    <CardDescription>共 {feedbackResponses.length} 份回覆</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {(feedbackSurvey.questions as any[])?.map((q: any) => {
+                      const questionResponses = feedbackResponses
+                        .map(r => (r.responses as Record<string, any>)?.[q.id])
+                        .filter(v => v !== undefined && v !== null);
+
+                      if (questionResponses.length === 0) return null;
+
+                      return (
+                        <div key={q.id} className="space-y-2">
+                          <p className="text-sm font-medium">{q.question}</p>
+                          {q.type === "rating" && (() => {
+                            const nums = questionResponses.map(Number).filter(n => !isNaN(n));
+                            const avg = nums.length > 0 ? (nums.reduce((a: number, b: number) => a + b, 0) / nums.length) : 0;
+                            const distribution = [1, 2, 3, 4, 5].map(star => ({
+                              star: `${star}`,
+                              count: nums.filter((n: number) => n === star).length
+                            }));
+                            return (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-2xl font-bold" data-testid={`text-avg-rating-${q.id}`}>{avg.toFixed(1)}</span>
+                                  <span className="text-sm text-muted-foreground">/ 5 ({nums.length} 份回覆)</span>
+                                </div>
+                                <div className="space-y-1">
+                                  {distribution.reverse().map(d => (
+                                    <div key={d.star} className="flex items-center gap-2 text-sm">
+                                      <span className="w-8 text-right">{d.star}</span>
+                                      <div className="flex-1 bg-muted rounded-full h-2">
+                                        <div
+                                          className="bg-primary h-2 rounded-full"
+                                          style={{ width: `${nums.length > 0 ? (d.count / nums.length * 100) : 0}%` }}
+                                        />
+                                      </div>
+                                      <span className="w-8 text-muted-foreground">{d.count}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          {q.type === "multiChoice" && (() => {
+                            const counts: Record<string, number> = {};
+                            questionResponses.forEach((v: any) => {
+                              counts[v] = (counts[v] || 0) + 1;
+                            });
+                            return (
+                              <div className="space-y-1">
+                                {(q.options || []).map((opt: string) => (
+                                  <div key={opt} className="flex items-center gap-2 text-sm">
+                                    <span className="w-24 truncate">{opt}</span>
+                                    <div className="flex-1 bg-muted rounded-full h-2">
+                                      <div
+                                        className="bg-primary h-2 rounded-full"
+                                        style={{ width: `${questionResponses.length > 0 ? ((counts[opt] || 0) / questionResponses.length * 100) : 0}%` }}
+                                      />
+                                    </div>
+                                    <span className="w-12 text-muted-foreground text-right">{counts[opt] || 0} ({questionResponses.length > 0 ? Math.round((counts[opt] || 0) / questionResponses.length * 100) : 0}%)</span>
+                                  </div>
                                 ))}
                               </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground mb-4">尚未設定問卷</p>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        apiRequest("POST", `/api/webinars/${id}/feedback-survey`, {
-                          webinarId: id,
-                          title: "請給我們回饋",
-                          questions: [
-                            { id: "q1", type: "rating", question: "您對本次直播的整體評價？", required: true },
-                            { id: "q2", type: "text", question: "您最喜歡哪個部分？", required: false },
-                            { id: "q3", type: "multiChoice", question: "您會推薦給朋友嗎？", options: ["一定會", "可能會", "不確定", "不會"], required: true },
-                          ],
-                          isActive: true,
-                        }).then(() => {
-                          queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "feedback-survey"] });
-                          toast({ title: "預設問卷已建立" });
-                        });
-                      }}
-                      data-testid="button-create-default-survey"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      建立預設問卷
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                            );
+                          })()}
+                          {q.type === "text" && (
+                            <ScrollArea className="h-[150px]">
+                              <div className="space-y-2">
+                                {questionResponses.map((v: any, i: number) => (
+                                  <div key={i} className="p-2 bg-muted rounded-md text-sm">{String(v)}</div>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              )}
+
+              {feedbackSurvey && (!feedbackResponses || feedbackResponses.length === 0) && (
+                <Card>
+                  <CardContent className="py-8">
+                    <p className="text-center text-muted-foreground">尚無問卷回覆</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </TabsContent>
 
           {/* Analytics Tab */}
@@ -1475,108 +1712,392 @@ export default function AdminWebinarDetail() {
 
           {/* Settings Tab */}
           <TabsContent value="settings">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">直播間設定</CardTitle>
-                <CardDescription>排程模式、時區與重播設定</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <Label>排程模式</Label>
-                  <Select value={settingsScheduleMode} onValueChange={setSettingsScheduleMode}>
-                    <SelectTrigger data-testid="select-schedule-mode">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fixed">固定時間</SelectItem>
-                      <SelectItem value="onDemand">隨選觀看</SelectItem>
-                      <SelectItem value="justInTime">即時開始</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {settingsScheduleMode === "justInTime" && (
+            <div className="space-y-6">
+              {/* Existing schedule/timezone/replay settings */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">排程設定</CardTitle>
+                  <CardDescription>排程模式、時區與重播設定</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
                   <div className="space-y-2">
-                    <Label>即時開始分鐘數</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={settingsJitMinutes}
-                      onChange={(e) => setSettingsJitMinutes(e.target.value)}
-                      data-testid="input-jit-minutes"
-                    />
-                    <p className="text-xs text-muted-foreground">觀眾進入後，下一場將在此分鐘數內開始</p>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label>時區</Label>
-                  <Select value={settingsTimezone} onValueChange={setSettingsTimezone}>
-                    <SelectTrigger data-testid="select-timezone">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Asia/Taipei">Asia/Taipei (台北)</SelectItem>
-                      <SelectItem value="Asia/Tokyo">Asia/Tokyo (東京)</SelectItem>
-                      <SelectItem value="Asia/Shanghai">Asia/Shanghai (上海)</SelectItem>
-                      <SelectItem value="Asia/Hong_Kong">Asia/Hong_Kong (香港)</SelectItem>
-                      <SelectItem value="America/New_York">America/New_York (紐約)</SelectItem>
-                      <SelectItem value="America/Los_Angeles">America/Los_Angeles (洛杉磯)</SelectItem>
-                      <SelectItem value="Europe/London">Europe/London (倫敦)</SelectItem>
-                      <SelectItem value="Europe/Paris">Europe/Paris (巴黎)</SelectItem>
-                      <SelectItem value="Australia/Sydney">Australia/Sydney (雪梨)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>啟用重播</Label>
-                    <Switch
-                      checked={settingsReplayEnabled}
-                      onCheckedChange={setSettingsReplayEnabled}
-                      data-testid="switch-replay-enabled"
-                    />
+                    <Label>排程模式</Label>
+                    <Select value={settingsScheduleMode} onValueChange={setSettingsScheduleMode}>
+                      <SelectTrigger data-testid="select-schedule-mode">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fixed">固定時間</SelectItem>
+                        <SelectItem value="onDemand">隨選觀看</SelectItem>
+                        <SelectItem value="justInTime">即時開始</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  {settingsReplayEnabled && (
+                  {settingsScheduleMode === "justInTime" && (
                     <div className="space-y-2">
-                      <Label>重播可用時數</Label>
+                      <Label>即時開始分鐘數</Label>
                       <Input
                         type="number"
                         min="1"
-                        value={settingsReplayHours}
-                        onChange={(e) => setSettingsReplayHours(e.target.value)}
-                        data-testid="input-replay-hours"
+                        value={settingsJitMinutes}
+                        onChange={(e) => setSettingsJitMinutes(e.target.value)}
+                        data-testid="input-jit-minutes"
                       />
-                      <p className="text-xs text-muted-foreground">直播結束後，重播影片的可用時數</p>
+                      <p className="text-xs text-muted-foreground">觀眾進入後，下一場將在此分鐘數內開始</p>
                     </div>
                   )}
-                </div>
 
-                <Button
-                  onClick={() => {
-                    const scheduleMode = {
-                      recurring: false,
-                      onDemand: settingsScheduleMode === "onDemand",
-                      justInTime: settingsScheduleMode === "justInTime",
-                      justInTimeMinutes: settingsScheduleMode === "justInTime" ? parseInt(settingsJitMinutes) || 15 : 15,
-                    };
-                    updateWebinar.mutate({
-                      scheduleMode,
-                      timezone: settingsTimezone,
-                      replayEnabled: settingsReplayEnabled,
-                      replayAvailableHours: parseInt(settingsReplayHours) || 48,
-                    });
-                  }}
-                  disabled={updateWebinar.isPending}
-                  data-testid="button-save-settings"
-                >
-                  {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  儲存設定
-                </Button>
-              </CardContent>
-            </Card>
+                  <div className="space-y-2">
+                    <Label>時區</Label>
+                    <Select value={settingsTimezone} onValueChange={setSettingsTimezone}>
+                      <SelectTrigger data-testid="select-timezone">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Asia/Taipei">Asia/Taipei (台北)</SelectItem>
+                        <SelectItem value="Asia/Tokyo">Asia/Tokyo (東京)</SelectItem>
+                        <SelectItem value="Asia/Shanghai">Asia/Shanghai (上海)</SelectItem>
+                        <SelectItem value="Asia/Hong_Kong">Asia/Hong_Kong (香港)</SelectItem>
+                        <SelectItem value="America/New_York">America/New_York (紐約)</SelectItem>
+                        <SelectItem value="America/Los_Angeles">America/Los_Angeles (洛杉磯)</SelectItem>
+                        <SelectItem value="Europe/London">Europe/London (倫敦)</SelectItem>
+                        <SelectItem value="Europe/Paris">Europe/Paris (巴黎)</SelectItem>
+                        <SelectItem value="Australia/Sydney">Australia/Sydney (雪梨)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>啟用重播</Label>
+                      <Switch
+                        checked={settingsReplayEnabled}
+                        onCheckedChange={setSettingsReplayEnabled}
+                        data-testid="switch-replay-enabled"
+                      />
+                    </div>
+                    {settingsReplayEnabled && (
+                      <div className="space-y-2">
+                        <Label>重播可用時數</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={settingsReplayHours}
+                          onChange={(e) => setSettingsReplayHours(e.target.value)}
+                          data-testid="input-replay-hours"
+                        />
+                        <p className="text-xs text-muted-foreground">直播結束後，重播影片的可用時數</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    onClick={() => {
+                      const scheduleMode = {
+                        recurring: false,
+                        onDemand: settingsScheduleMode === "onDemand",
+                        justInTime: settingsScheduleMode === "justInTime",
+                        justInTimeMinutes: settingsScheduleMode === "justInTime" ? parseInt(settingsJitMinutes) || 15 : 15,
+                      };
+                      updateWebinar.mutate({
+                        scheduleMode,
+                        timezone: settingsTimezone,
+                        replayEnabled: settingsReplayEnabled,
+                        replayAvailableHours: parseInt(settingsReplayHours) || 48,
+                      });
+                    }}
+                    disabled={updateWebinar.isPending}
+                    data-testid="button-save-settings"
+                  >
+                    {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    儲存排程設定
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Brand Settings */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Palette className="h-4 w-4" />
+                    品牌設定
+                  </CardTitle>
+                  <CardDescription>自訂直播間的外觀和品牌元素</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Logo 網址</Label>
+                    <Input
+                      value={brandLogo}
+                      onChange={(e) => setBrandLogo(e.target.value)}
+                      placeholder="https://example.com/logo.png"
+                      data-testid="input-brand-logo"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>主色調</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={brandPrimaryColor}
+                          onChange={(e) => setBrandPrimaryColor(e.target.value)}
+                          className="w-10 h-10 rounded-md border cursor-pointer"
+                          data-testid="input-brand-primary-color"
+                        />
+                        <Input
+                          value={brandPrimaryColor}
+                          onChange={(e) => setBrandPrimaryColor(e.target.value)}
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>副色調</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={brandSecondaryColor}
+                          onChange={(e) => setBrandSecondaryColor(e.target.value)}
+                          className="w-10 h-10 rounded-md border cursor-pointer"
+                          data-testid="input-brand-secondary-color"
+                        />
+                        <Input
+                          value={brandSecondaryColor}
+                          onChange={(e) => setBrandSecondaryColor(e.target.value)}
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>背景色</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={brandBackgroundColor}
+                          onChange={(e) => setBrandBackgroundColor(e.target.value)}
+                          className="w-10 h-10 rounded-md border cursor-pointer"
+                          data-testid="input-brand-bg-color"
+                        />
+                        <Input
+                          value={brandBackgroundColor}
+                          onChange={(e) => setBrandBackgroundColor(e.target.value)}
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {brandLogo && (
+                    <div className="p-3 bg-muted rounded-md">
+                      <p className="text-xs text-muted-foreground mb-2">Logo 預覽：</p>
+                      <img src={brandLogo} alt="Logo preview" className="max-h-16 object-contain" />
+                    </div>
+                  )}
+                  <Button
+                    onClick={() => {
+                      updateWebinar.mutate({
+                        brandSettings: {
+                          logo: brandLogo,
+                          watermark: "",
+                          primaryColor: brandPrimaryColor,
+                          secondaryColor: brandSecondaryColor,
+                          backgroundColor: brandBackgroundColor,
+                        },
+                      });
+                    }}
+                    disabled={updateWebinar.isPending}
+                    data-testid="button-save-brand"
+                  >
+                    {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    儲存品牌設定
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Email Settings */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Mail className="h-4 w-4" />
+                    郵件設定
+                  </CardTitle>
+                  <CardDescription>控制自動郵件通知的開關和內容</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>報名確認信</Label>
+                      <Switch
+                        checked={emailConfirmation}
+                        onCheckedChange={setEmailConfirmation}
+                        data-testid="switch-email-confirmation"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>24 小時前提醒</Label>
+                      <Switch
+                        checked={emailReminder24h}
+                        onCheckedChange={setEmailReminder24h}
+                        data-testid="switch-email-24h"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>1 小時前提醒</Label>
+                      <Switch
+                        checked={emailReminder1h}
+                        onCheckedChange={setEmailReminder1h}
+                        data-testid="switch-email-1h"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>結束後跟進信</Label>
+                      <Switch
+                        checked={emailFollowUp}
+                        onCheckedChange={setEmailFollowUp}
+                        data-testid="switch-email-followup"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>自訂郵件主旨（選填）</Label>
+                    <Input
+                      value={emailCustomSubject}
+                      onChange={(e) => setEmailCustomSubject(e.target.value)}
+                      placeholder="留空使用預設主旨"
+                      data-testid="input-email-subject"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>自訂郵件模板（選填）</Label>
+                    <Textarea
+                      value={emailCustomTemplate}
+                      onChange={(e) => setEmailCustomTemplate(e.target.value)}
+                      placeholder="留空使用預設模板，支援 HTML"
+                      rows={4}
+                      data-testid="input-email-template"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => {
+                      updateWebinar.mutate({
+                        emailSettings: {
+                          confirmationEnabled: emailConfirmation,
+                          reminder24hEnabled: emailReminder24h,
+                          reminder1hEnabled: emailReminder1h,
+                          followUpEnabled: emailFollowUp,
+                          customSubject: emailCustomSubject,
+                          customTemplate: emailCustomTemplate,
+                        },
+                      });
+                    }}
+                    disabled={updateWebinar.isPending}
+                    data-testid="button-save-email"
+                  >
+                    {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    儲存郵件設定
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Recurring Schedule */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    循環排程
+                  </CardTitle>
+                  <CardDescription>自動產生定期直播場次</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>啟用循環排程</Label>
+                    <Switch
+                      checked={recurringEnabled}
+                      onCheckedChange={setRecurringEnabled}
+                      data-testid="switch-recurring-enabled"
+                    />
+                  </div>
+                  {recurringEnabled && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>每週播放日</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {["日", "一", "二", "三", "四", "五", "六"].map((day, i) => (
+                            <Button
+                              key={i}
+                              size="sm"
+                              variant={recurringDays.includes(i) ? "default" : "outline"}
+                              onClick={() => {
+                                setRecurringDays(prev =>
+                                  prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i].sort()
+                                );
+                              }}
+                              data-testid={`button-recurring-day-${i}`}
+                            >
+                              {day}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>播放時間（多個時間用逗號分隔）</Label>
+                        <Input
+                          value={recurringTimes}
+                          onChange={(e) => setRecurringTimes(e.target.value)}
+                          placeholder="09:00, 14:00, 19:00"
+                          data-testid="input-recurring-times"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>排除日期（用逗號分隔）</Label>
+                        <Input
+                          value={recurringExcludeDates}
+                          onChange={(e) => setRecurringExcludeDates(e.target.value)}
+                          placeholder="2026-01-01, 2026-02-14"
+                          data-testid="input-recurring-exclude"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          onClick={() => {
+                            updateWebinar.mutate({
+                              recurringSchedule: {
+                                enabled: recurringEnabled,
+                                days: recurringDays,
+                                times: recurringTimes.split(",").map(t => t.trim()).filter(Boolean),
+                                excludeDates: recurringExcludeDates.split(",").map(d => d.trim()).filter(Boolean),
+                              },
+                            });
+                          }}
+                          disabled={updateWebinar.isPending}
+                          data-testid="button-save-recurring"
+                        >
+                          {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          儲存循環排程
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            apiRequest("POST", `/api/webinars/${id}/generate-sessions`, { days: 30 })
+                              .then(() => {
+                                toast({ title: "已產生未來 30 天的場次" });
+                              })
+                              .catch((err: any) => {
+                                toast({ title: "產生場次失敗", description: err.message, variant: "destructive" });
+                              });
+                          }}
+                          data-testid="button-generate-sessions"
+                        >
+                          <RefreshCw className="h-4 w-4 mr-1" />
+                          產生未來 30 天場次
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </main>

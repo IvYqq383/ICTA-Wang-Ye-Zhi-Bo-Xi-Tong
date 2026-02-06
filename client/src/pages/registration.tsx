@@ -82,7 +82,7 @@ export default function Registration() {
 
   if (!webinar) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(135deg, #4338ca 0%, #7e22ce 50%, #be185d 100%)" }}>
         <Card className="max-w-md mx-auto">
           <CardContent className="pt-6">
             <p className="text-center text-muted-foreground">找不到此研討會</p>
@@ -92,12 +92,22 @@ export default function Registration() {
     );
   }
 
+  const brandSettings = webinar.brandSettings as { logo?: string; primaryColor?: string; secondaryColor?: string; backgroundColor?: string } | null;
+  const brandGradient = brandSettings?.primaryColor && brandSettings?.secondaryColor
+    ? { background: `linear-gradient(135deg, ${brandSettings.primaryColor} 0%, ${brandSettings.secondaryColor} 100%)` }
+    : { background: "linear-gradient(135deg, #4338ca 0%, #7e22ce 50%, #be185d 100%)" };
+
   if (registered) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4" style={brandGradient}>
         <Card className="max-w-lg w-full">
           <CardContent className="pt-8 pb-8 text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            {brandSettings?.logo && (
+              <div className="flex justify-center mb-4">
+                <img src={brandSettings.logo} alt="Logo" className="max-h-12 object-contain" />
+              </div>
+            )}
+            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="h-8 w-8 text-green-600" />
             </div>
             <h2 className="text-2xl font-bold mb-2">報名成功！</h2>
@@ -125,9 +135,14 @@ export default function Registration() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4" style={brandGradient}>
       <Card className="max-w-lg w-full">
         <CardHeader className="text-center">
+          {brandSettings?.logo && (
+            <div className="flex justify-center mb-2">
+              <img src={brandSettings.logo} alt="Logo" className="max-h-12 object-contain" />
+            </div>
+          )}
           {webinar.coverImage && (
             <img
               src={webinar.coverImage}

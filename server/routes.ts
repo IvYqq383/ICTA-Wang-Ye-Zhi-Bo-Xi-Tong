@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { sendWebinarRegistrationEmail } from "./gmail";
+import { createEmailRemindersForRegistration, startEmailScheduler } from "./email-scheduler";
 import {
   insertWebinarSchema,
   insertRegistrationSchema,
@@ -424,21 +425,30 @@ export async function registerRoutes(
       
       const registration = await storage.createRegistration(data);
       
-      // Get webinar info for email
       const webinar = await storage.getWebinar(data.webinarId);
       if (webinar) {
-        const webinarUrl = `${req.protocol}://${req.get("host")}/webinar/${data.webinarId}`;
+        const baseUrl = `${req.protocol}://${req.get("host")}`;
+        const webinarUrl = `${baseUrl}/webinar/${data.webinarId}`;
+        const emailSettings = webinar.emailSettings as any;
+        
+        if (!emailSettings || emailSettings.confirmationEnabled !== false) {
+          try {
+            await sendWebinarRegistrationEmail(
+              data.email,
+              data.name,
+              webinar.title,
+              new Date(webinar.startTime),
+              webinarUrl
+            );
+          } catch (emailError) {
+            console.error("Failed to send email:", emailError);
+          }
+        }
+        
         try {
-          await sendWebinarRegistrationEmail(
-            data.email,
-            data.name,
-            webinar.title,
-            new Date(webinar.startTime),
-            webinarUrl
-          );
-        } catch (emailError) {
-          console.error("Failed to send email:", emailError);
-          // Continue even if email fails
+          await createEmailRemindersForRegistration(registration, webinar, baseUrl);
+        } catch (reminderError) {
+          console.error("Failed to create reminders:", reminderError);
         }
       }
       
@@ -756,15 +766,145 @@ export async function registerRoutes(
     }
   });
 
-  // ============ Update Webinar Settings ============
-  app.patch("/api/webinars/:id", requireAdmin, async (req, res) => {
+  // ============ Webinar Duplication ============
+  app.post("/api/webinars/:id/duplicate", requireAdmin, async (req, res) => {
     try {
-      const webinar = await storage.updateWebinar(req.params.id as string, req.body);
-      res.json(webinar);
+      const sourceWebinar = await storage.getWebinar(req.params.id as string);
+      if (!sourceWebinar) {
+        return res.status(404).json({ message: "Webinar not found" });
+      }
+
+      const newWebinar = await storage.createWebinar({
+        title: `${sourceWebinar.title} (副本)`,
+        description: sourceWebinar.description || undefined,
+        vimeoUrl: sourceWebinar.vimeoUrl,
+        coverImage: sourceWebinar.coverImage || undefined,
+        startTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        videoDuration: sourceWebinar.videoDuration || undefined,
+        scheduleMode: sourceWebinar.scheduleMode as any,
+        recurringSchedule: sourceWebinar.recurringSchedule as any,
+        timezone: sourceWebinar.timezone || undefined,
+        brandSettings: sourceWebinar.brandSettings as any,
+        replayEnabled: sourceWebinar.replayEnabled ?? undefined,
+        replayAvailableHours: sourceWebinar.replayAvailableHours ?? undefined,
+        emailSettings: sourceWebinar.emailSettings as any,
+      });
+
+      const [sourceFakeUsers, sourceMessages, sourceCtas, sourcePolls, sourceTips] = await Promise.all([
+        storage.getFakeUsersByWebinar(sourceWebinar.id),
+        storage.getScheduledMessagesByWebinar(sourceWebinar.id),
+        storage.getCtaButtonsByWebinar(sourceWebinar.id),
+        storage.getPollsByWebinar(sourceWebinar.id),
+        storage.getTipsByWebinar(sourceWebinar.id),
+      ]);
+
+      const fakeUserIdMap = new Map<string, string>();
+      for (const fu of sourceFakeUsers) {
+        const newFu = await storage.createFakeUser({
+          webinarId: newWebinar.id,
+          name: fu.name,
+          avatar: fu.avatar || undefined,
+        });
+        fakeUserIdMap.set(fu.id, newFu.id);
+      }
+
+      for (const msg of sourceMessages) {
+        await storage.createScheduledMessage({
+          webinarId: newWebinar.id,
+          fakeUserId: fakeUserIdMap.get(msg.fakeUserId) || msg.fakeUserId,
+          message: msg.message,
+          triggerTime: msg.triggerTime,
+        });
+      }
+
+      for (const cta of sourceCtas) {
+        await storage.createCtaButton({
+          webinarId: newWebinar.id,
+          text: cta.text,
+          url: cta.url,
+          startTime: cta.startTime,
+          endTime: cta.endTime ?? undefined,
+          style: cta.style || undefined,
+        });
+      }
+
+      for (const poll of sourcePolls) {
+        await storage.createPoll({
+          webinarId: newWebinar.id,
+          question: poll.question,
+          options: poll.options as string[],
+          triggerTime: poll.triggerTime,
+          duration: poll.duration ?? undefined,
+        });
+      }
+
+      for (const tip of sourceTips) {
+        await storage.createTip({
+          webinarId: newWebinar.id,
+          title: tip.title,
+          content: tip.content,
+          triggerTime: tip.triggerTime,
+          duration: tip.duration ?? undefined,
+        });
+      }
+
+      res.json(newWebinar);
     } catch (error: any) {
-      res.status(400).json({ message: error.message });
+      res.status(500).json({ message: error.message });
     }
   });
+
+  // ============ Recurring Schedule Generation ============
+  app.post("/api/webinars/:id/generate-sessions", requireAdmin, async (req, res) => {
+    try {
+      const webinar = await storage.getWebinar(req.params.id as string);
+      if (!webinar) {
+        return res.status(404).json({ message: "Webinar not found" });
+      }
+
+      const schedule = webinar.recurringSchedule as any;
+      if (!schedule?.enabled || !schedule.days?.length || !schedule.times?.length) {
+        return res.status(400).json({ message: "No recurring schedule configured" });
+      }
+
+      const daysToGenerate = req.body.days || 30;
+      const now = new Date();
+      const sessions: any[] = [];
+
+      for (let d = 0; d < daysToGenerate; d++) {
+        const date = new Date(now);
+        date.setDate(date.getDate() + d);
+        const dayOfWeek = date.getDay();
+
+        if (!schedule.days.includes(dayOfWeek)) continue;
+
+        const dateStr = date.toISOString().split("T")[0];
+        if (schedule.excludeDates?.includes(dateStr)) continue;
+
+        for (const time of schedule.times) {
+          const [hours, minutes] = time.split(":").map(Number);
+          const sessionDate = new Date(date);
+          sessionDate.setHours(hours, minutes, 0, 0);
+
+          if (sessionDate <= now) continue;
+
+          const session = await storage.createWebinarSession({
+            webinarId: webinar.id,
+            scheduledStart: sessionDate,
+            status: "scheduled",
+          });
+          sessions.push(session);
+        }
+      }
+
+      res.json({ generated: sessions.length, sessions });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Start email scheduler
+  startEmailScheduler();
 
   // ============ Mark Attendance ============
   app.post("/api/registrations/:id/attend", async (req, res) => {
