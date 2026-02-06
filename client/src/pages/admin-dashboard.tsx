@@ -13,11 +13,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { 
   Plus, Video, Calendar, 
   ExternalLink, Loader2, LogOut, Radio, Copy,
   BarChart3, Users, Pencil, Share2, MessageCircle,
-  Eye, Code
+  Eye, Code, Trash2
 } from "lucide-react";
 import type { Webinar } from "@shared/schema";
 
@@ -98,6 +99,19 @@ export default function AdminDashboard() {
     },
     onError: (error: any) => {
       toast({ title: "複製失敗", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (webinarId: string) => {
+      return apiRequest("DELETE", `/api/webinars/${webinarId}`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars"] });
+      toast({ title: "已刪除", description: "直播間已成功刪除" });
+    },
+    onError: (error: any) => {
+      toast({ title: "刪除失敗", description: error.message, variant: "destructive" });
     },
   });
 
@@ -446,6 +460,38 @@ export default function AdminDashboard() {
                           <ExternalLink className="h-3.5 w-3.5" />
                           <span className="hidden md:inline">報名頁</span>
                         </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="justify-start gap-2 text-xs text-destructive hover:text-destructive"
+                              data-testid={`button-delete-${webinar.id}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span className="hidden md:inline">刪除</span>
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>確定要刪除此直播間？</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                將會刪除「{webinar.title}」及其所有相關資料（報名記錄、聊天訊息、分析數據等），此操作無法復原。
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel data-testid="button-cancel-delete">取消</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteMutation.mutate(webinar.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                data-testid="button-confirm-delete"
+                              >
+                                {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                                確定刪除
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                   </CardContent>
