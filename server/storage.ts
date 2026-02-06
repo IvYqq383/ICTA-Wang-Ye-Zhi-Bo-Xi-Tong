@@ -19,6 +19,7 @@ import {
   likes, type InsertLike, type Like,
   users, type InsertUser, type User,
   webinarSessions, type InsertWebinarSession, type WebinarSession,
+  webhooks, type InsertWebhook, type Webhook,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -115,6 +116,13 @@ export interface IStorage {
   getUpcomingSessions(webinarId: string): Promise<WebinarSession[]>;
   updateWebinarSession(id: string, data: Partial<WebinarSession>): Promise<void>;
   deleteWebinarSession(id: string): Promise<void>;
+  
+  // Webhooks
+  createWebhook(data: InsertWebhook): Promise<Webhook>;
+  getWebhooksByWebinar(webinarId: string): Promise<Webhook[]>;
+  getWebhooksByEvent(webinarId: string, eventType: string): Promise<Webhook[]>;
+  deleteWebhook(id: string): Promise<void>;
+  updateWebhook(id: string, data: Partial<Webhook>): Promise<Webhook | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -486,6 +494,31 @@ export class DatabaseStorage implements IStorage {
 
   async deleteWebinarSession(id: string): Promise<void> {
     await db.delete(webinarSessions).where(eq(webinarSessions.id, id));
+  }
+
+  // Webhooks
+  async createWebhook(data: InsertWebhook): Promise<Webhook> {
+    const result = await db.insert(webhooks).values(data).returning();
+    return result[0];
+  }
+
+  async getWebhooksByWebinar(webinarId: string): Promise<Webhook[]> {
+    return db.select().from(webhooks).where(eq(webhooks.webinarId, webinarId));
+  }
+
+  async getWebhooksByEvent(webinarId: string, eventType: string): Promise<Webhook[]> {
+    return db.select().from(webhooks).where(
+      and(eq(webhooks.webinarId, webinarId), eq(webhooks.eventType, eventType), eq(webhooks.enabled, true))
+    );
+  }
+
+  async deleteWebhook(id: string): Promise<void> {
+    await db.delete(webhooks).where(eq(webhooks.id, id));
+  }
+
+  async updateWebhook(id: string, data: Partial<Webhook>): Promise<Webhook | undefined> {
+    const result = await db.update(webhooks).set(data).where(eq(webhooks.id, id)).returning();
+    return result[0];
   }
 }
 

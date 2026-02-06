@@ -21,16 +21,15 @@ import {
   BarChart, Trash2, Loader2, Clock, Radio, Copy, ExternalLink,
   Lightbulb, HelpCircle, Star, TrendingUp, Settings, Code,
   Mail, Palette, Calendar, Edit, Save, RefreshCw, FileText, Eye,
-  Upload, ImagePlus, X
+  Upload, ImagePlus, X, Bell, Link2, Download, Globe
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, LineChart, Line } from "recharts";
-import type { Webinar, FakeUser, ScheduledMessage, CtaButton, Poll, Registration, Tip, Question, FeedbackSurvey } from "@shared/schema";
+import type { Webinar, FakeUser, ScheduledMessage, CtaButton, Poll, Registration, Tip, Question, FeedbackSurvey, Webhook } from "@shared/schema";
 import type { FeedbackResponse } from "@shared/schema";
 
-// Analytics Response Type
 interface AnalyticsResponse {
   webinar: Webinar;
   summary: {
@@ -50,20 +49,17 @@ interface AnalyticsResponse {
   registrations: Registration[];
 }
 
-// Fake User Schema
 const fakeUserSchema = z.object({
   name: z.string().min(1, "請輸入名稱"),
   avatar: z.string().optional(),
 });
 
-// Scheduled Message Schema
 const scheduledMessageSchema = z.object({
   fakeUserId: z.string().min(1, "請選擇假人"),
   message: z.string().min(1, "請輸入訊息"),
   triggerTime: z.string().min(1, "請輸入觸發時間"),
 });
 
-// CTA Button Schema
 const ctaSchema = z.object({
   text: z.string().min(1, "請輸入按鈕文字"),
   url: z.string().url("請輸入有效網址"),
@@ -72,7 +68,6 @@ const ctaSchema = z.object({
   style: z.string().default("primary"),
 });
 
-// Poll Schema
 const pollSchema = z.object({
   question: z.string().min(1, "請輸入問題"),
   options: z.string().min(1, "請輸入選項（用逗號分隔）"),
@@ -80,7 +75,6 @@ const pollSchema = z.object({
   duration: z.string().default("60"),
 });
 
-// Tip Schema
 const tipSchema = z.object({
   title: z.string().min(1, "請輸入標題"),
   content: z.string().min(1, "請輸入內容"),
@@ -116,13 +110,11 @@ export default function AdminWebinarDetail() {
   const [uploadingCover, setUploadingCover] = useState(false);
   const coverFileRef = useRef<HTMLInputElement>(null);
 
-  // Brand settings state
   const [brandLogo, setBrandLogo] = useState("");
   const [brandPrimaryColor, setBrandPrimaryColor] = useState("#667eea");
   const [brandSecondaryColor, setBrandSecondaryColor] = useState("#764ba2");
   const [brandBackgroundColor, setBrandBackgroundColor] = useState("#1a1a2e");
 
-  // Email settings state
   const [emailConfirmation, setEmailConfirmation] = useState(true);
   const [emailReminder24h, setEmailReminder24h] = useState(true);
   const [emailReminder1h, setEmailReminder1h] = useState(true);
@@ -130,16 +122,18 @@ export default function AdminWebinarDetail() {
   const [emailCustomSubject, setEmailCustomSubject] = useState("");
   const [emailCustomTemplate, setEmailCustomTemplate] = useState("");
 
-  // Recurring schedule state
   const [recurringEnabled, setRecurringEnabled] = useState(false);
   const [recurringDays, setRecurringDays] = useState<number[]>([]);
   const [recurringTimes, setRecurringTimes] = useState("");
   const [recurringExcludeDates, setRecurringExcludeDates] = useState("");
 
-  // Manual session state
   const [newSessionDate, setNewSessionDate] = useState("");
 
-  // Queries
+  const [isWebhookOpen, setIsWebhookOpen] = useState(false);
+  const [newWebhookEvent, setNewWebhookEvent] = useState("registration");
+  const [newWebhookUrl, setNewWebhookUrl] = useState("");
+  const [newWebhookSecret, setNewWebhookSecret] = useState("");
+
   const { data: webinar, isLoading: webinarLoading } = useQuery<Webinar>({
     queryKey: ["/api/webinars", id],
     enabled: !!id,
@@ -200,6 +194,11 @@ export default function AdminWebinarDetail() {
     enabled: !!feedbackSurvey?.id,
   });
 
+  const { data: webhooks } = useQuery<Webhook[]>({
+    queryKey: ["/api/webinars", id, "webhooks"],
+    enabled: !!id,
+  });
+
   useEffect(() => {
     if (webinar) {
       const sm = webinar.scheduleMode as any;
@@ -215,14 +214,12 @@ export default function AdminWebinarDetail() {
       setSettingsReplayEnabled(webinar.replayEnabled ?? true);
       setSettingsReplayHours(String(webinar.replayAvailableHours ?? 48));
 
-      // Initialize edit info
       setEditTitle(webinar.title);
       setEditDescription(webinar.description || "");
       setEditVimeoUrl(webinar.vimeoUrl);
       setEditStartTime(new Date(webinar.startTime).toISOString().slice(0, 16));
       setEditCoverImage(webinar.coverImage || "");
 
-      // Initialize brand settings
       const bs = webinar.brandSettings as any;
       if (bs) {
         setBrandLogo(bs.logo || "");
@@ -231,7 +228,6 @@ export default function AdminWebinarDetail() {
         setBrandBackgroundColor(bs.backgroundColor || "#1a1a2e");
       }
 
-      // Initialize email settings
       const es = webinar.emailSettings as any;
       if (es) {
         setEmailConfirmation(es.confirmationEnabled ?? true);
@@ -242,7 +238,6 @@ export default function AdminWebinarDetail() {
         setEmailCustomTemplate(es.customTemplate || "");
       }
 
-      // Initialize recurring schedule
       const rs = webinar.recurringSchedule as any;
       if (rs) {
         setRecurringEnabled(rs.enabled ?? false);
@@ -253,7 +248,6 @@ export default function AdminWebinarDetail() {
     }
   }, [webinar]);
 
-  // Forms
   const fakeUserForm = useForm({
     resolver: zodResolver(fakeUserSchema),
     defaultValues: { name: "", avatar: "" },
@@ -279,7 +273,6 @@ export default function AdminWebinarDetail() {
     defaultValues: { title: "", content: "", triggerTime: "", duration: "30" },
   });
 
-  // Mutations
   const createFakeUser = useMutation({
     mutationFn: async (data: z.infer<typeof fakeUserSchema>) => {
       return apiRequest("POST", `/api/webinars/${id}/fake-users`, data);
@@ -408,6 +401,33 @@ export default function AdminWebinarDetail() {
     },
   });
 
+  const createWebhook = useMutation({
+    mutationFn: async (data: { webinarId: string; eventType: string; targetUrl: string; secret: string; enabled: boolean }) => {
+      return apiRequest("POST", `/api/webinars/${id}/webhooks`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "webhooks"] });
+      setIsWebhookOpen(false);
+      setNewWebhookEvent("registration");
+      setNewWebhookUrl("");
+      setNewWebhookSecret("");
+      toast({ title: "Webhook 已建立" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "建立失敗", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteWebhook = useMutation({
+    mutationFn: async (hookId: string) => {
+      return apiRequest("DELETE", `/api/webinars/${id}/webhooks/${hookId}`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "webhooks"] });
+      toast({ title: "Webhook 已刪除" });
+    },
+  });
+
   const formatTime = (seconds: number) => {
     const min = Math.floor(seconds / 60);
     const sec = seconds % 60;
@@ -440,7 +460,6 @@ export default function AdminWebinarDetail() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b bg-card sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/dashboard")}>
@@ -623,66 +642,31 @@ export default function AdminWebinarDetail() {
       </header>
 
       <main className="container mx-auto px-4 py-6">
-        {/* Links Section */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base">直播連結</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Input value={registrationUrl} readOnly className="flex-1" />
-              <Button variant="outline" size="icon" onClick={() => copyToClipboard(registrationUrl)}>
-                <Copy className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={() => window.open(registrationUrl, "_blank")}>
-                <ExternalLink className="h-4 w-4" />
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">將此報名連結分享給觀眾</p>
-          </CardContent>
-        </Card>
-
-        <Tabs defaultValue="fake-users">
+        <Tabs defaultValue="schedule">
           <TabsList className="mb-4 flex-wrap h-auto gap-1">
-            <TabsTrigger value="fake-users">
-              <Users className="h-4 w-4 mr-1" />
-              假人
+            <TabsTrigger value="schedule" data-testid="tab-schedule">
+              <Calendar className="h-4 w-4 mr-1" />
+              排程
             </TabsTrigger>
-            <TabsTrigger value="messages">
-              <MessageSquare className="h-4 w-4 mr-1" />
-              預排訊息
+            <TabsTrigger value="notifications" data-testid="tab-notifications">
+              <Bell className="h-4 w-4 mr-1" />
+              通知
             </TabsTrigger>
-            <TabsTrigger value="ctas">
+            <TabsTrigger value="interactions" data-testid="tab-interactions">
               <MousePointerClick className="h-4 w-4 mr-1" />
-              CTA
+              互動
             </TabsTrigger>
-            <TabsTrigger value="polls">
-              <BarChart className="h-4 w-4 mr-1" />
-              投票
+            <TabsTrigger value="chat" data-testid="tab-chat">
+              <MessageSquare className="h-4 w-4 mr-1" />
+              聊天
             </TabsTrigger>
-            <TabsTrigger value="tips">
-              <Lightbulb className="h-4 w-4 mr-1" />
-              提示
-            </TabsTrigger>
-            <TabsTrigger value="questions">
-              <HelpCircle className="h-4 w-4 mr-1" />
-              Q&A
-            </TabsTrigger>
-            <TabsTrigger value="survey">
-              <Star className="h-4 w-4 mr-1" />
-              問卷
-            </TabsTrigger>
-            <TabsTrigger value="registrations">
+            <TabsTrigger value="registrations" data-testid="tab-registrations">
               <Users className="h-4 w-4 mr-1" />
               報名 ({registrations?.length || 0})
             </TabsTrigger>
-            <TabsTrigger value="analytics">
+            <TabsTrigger value="analytics" data-testid="tab-analytics">
               <TrendingUp className="h-4 w-4 mr-1" />
               分析
-            </TabsTrigger>
-            <TabsTrigger value="embed" data-testid="tab-embed">
-              <Code className="h-4 w-4 mr-1" />
-              嵌入
             </TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings">
               <Settings className="h-4 w-4 mr-1" />
@@ -690,699 +674,858 @@ export default function AdminWebinarDetail() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Fake Users Tab */}
-          <TabsContent value="fake-users">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="text-base">假人管理</CardTitle>
-                  <CardDescription>建立虛擬觀眾以營造熱絡氣氛</CardDescription>
-                </div>
-                <Dialog open={isFakeUserOpen} onOpenChange={setIsFakeUserOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" data-testid="button-add-fake-user">
-                      <Plus className="h-4 w-4 mr-1" />
-                      新增假人
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>新增假人</DialogTitle>
-                    </DialogHeader>
-                    <Form {...fakeUserForm}>
-                      <form onSubmit={fakeUserForm.handleSubmit((data) => createFakeUser.mutate(data))} className="space-y-4">
-                        <FormField
-                          control={fakeUserForm.control}
-                          name="name"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>名稱</FormLabel>
-                              <FormControl>
-                                <Input placeholder="小明" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <Button type="submit" disabled={createFakeUser.isPending}>
-                          {createFakeUser.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          建立
-                        </Button>
-                      </form>
-                    </Form>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {fakeUsers && fakeUsers.length > 0 ? (
-                  <div className="space-y-2">
-                    {fakeUsers.map((user) => (
-                      <div key={user.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
-                        <span className="font-medium">{user.name}</span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteMutation.mutate({ type: "fake-users", itemId: user.id })}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">尚無假人</p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Scheduled Messages Tab */}
-          <TabsContent value="messages">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="text-base">預排訊息</CardTitle>
-                  <CardDescription>設定在特定時間自動發送的訊息</CardDescription>
-                </div>
-                <Dialog open={isMessageOpen} onOpenChange={setIsMessageOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" data-testid="button-add-scheduled-message">
-                      <Plus className="h-4 w-4 mr-1" />
-                      新增訊息
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>新增預排訊息</DialogTitle>
-                    </DialogHeader>
-                    <Form {...messageForm}>
-                      <form onSubmit={messageForm.handleSubmit((data) => createMessage.mutate(data))} className="space-y-4">
-                        <FormField
-                          control={messageForm.control}
-                          name="fakeUserId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>發送者</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="選擇假人" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {fakeUsers?.map((user) => (
-                                    <SelectItem key={user.id} value={user.id}>
-                                      {user.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={messageForm.control}
-                          name="message"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>訊息內容</FormLabel>
-                              <FormControl>
-                                <Textarea placeholder="太棒了！" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={messageForm.control}
-                          name="triggerTime"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>觸發時間 (分:秒)</FormLabel>
-                              <FormControl>
-                                <Input placeholder="2:30" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <Button type="submit" disabled={createMessage.isPending}>
-                          {createMessage.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          建立
-                        </Button>
-                      </form>
-                    </Form>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {scheduledMessages && scheduledMessages.length > 0 ? (
-                  <ScrollArea className="h-[400px]">
-                    <div className="space-y-2">
-                      {scheduledMessages.sort((a, b) => a.triggerTime - b.triggerTime).map((msg) => {
-                        const sender = fakeUsers?.find(u => u.id === msg.fakeUserId);
-                        return (
-                          <div key={msg.id} className="flex items-start justify-between p-3 bg-muted rounded-md gap-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline">
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  {formatTime(msg.triggerTime)}
-                                </Badge>
-                                <span className="font-medium text-sm">{sender?.name || "未知"}</span>
-                              </div>
-                              <p className="text-sm text-muted-foreground mt-1">{msg.message}</p>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteMutation.mutate({ type: "scheduled-messages", itemId: msg.id })}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">尚無預排訊息</p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* CTAs Tab */}
-          <TabsContent value="ctas">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="text-base">CTA 按鈕</CardTitle>
-                  <CardDescription>在影片上顯示行動呼籲按鈕</CardDescription>
-                </div>
-                <Dialog open={isCtaOpen} onOpenChange={setIsCtaOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" data-testid="button-add-cta">
-                      <Plus className="h-4 w-4 mr-1" />
-                      新增 CTA
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>新增 CTA 按鈕</DialogTitle>
-                    </DialogHeader>
-                    <Form {...ctaForm}>
-                      <form onSubmit={ctaForm.handleSubmit((data) => createCta.mutate(data))} className="space-y-4">
-                        <FormField
-                          control={ctaForm.control}
-                          name="text"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>按鈕文字</FormLabel>
-                              <FormControl>
-                                <Input placeholder="立即報名" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={ctaForm.control}
-                          name="url"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>連結網址</FormLabel>
-                              <FormControl>
-                                <Input placeholder="https://..." {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={ctaForm.control}
-                            name="startTime"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>開始時間 (分:秒)</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="5:00" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={ctaForm.control}
-                            name="endTime"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>結束時間（選填）</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="10:00" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <FormField
-                          control={ctaForm.control}
-                          name="style"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>樣式</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="primary">主要（藍色）</SelectItem>
-                                  <SelectItem value="secondary">次要（灰色）</SelectItem>
-                                  <SelectItem value="danger">強調（紅色）</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <Button type="submit" disabled={createCta.isPending}>
-                          {createCta.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          建立
-                        </Button>
-                      </form>
-                    </Form>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {ctas && ctas.length > 0 ? (
-                  <div className="space-y-2">
-                    {ctas.sort((a, b) => a.startTime - b.startTime).map((cta) => (
-                      <div key={cta.id} className="flex items-center justify-between p-3 bg-muted rounded-md gap-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline">
-                              {formatTime(cta.startTime)} - {cta.endTime ? formatTime(cta.endTime) : "結束"}
-                            </Badge>
-                            <Badge variant={cta.style === "primary" ? "default" : cta.style === "danger" ? "destructive" : "secondary"}>
-                              {cta.text}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1 truncate">{cta.url}</p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteMutation.mutate({ type: "ctas", itemId: cta.id })}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">尚無 CTA 按鈕</p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Polls Tab */}
-          <TabsContent value="polls">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="text-base">投票管理</CardTitle>
-                  <CardDescription>設定在特定時間彈出的投票問題</CardDescription>
-                </div>
-                <Dialog open={isPollOpen} onOpenChange={setIsPollOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" data-testid="button-add-poll">
-                      <Plus className="h-4 w-4 mr-1" />
-                      新增投票
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>新增投票</DialogTitle>
-                    </DialogHeader>
-                    <Form {...pollForm}>
-                      <form onSubmit={pollForm.handleSubmit((data) => createPoll.mutate(data))} className="space-y-4">
-                        <FormField
-                          control={pollForm.control}
-                          name="question"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>問題</FormLabel>
-                              <FormControl>
-                                <Input placeholder="您覺得這個課程如何？" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={pollForm.control}
-                          name="options"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>選項（用逗號分隔）</FormLabel>
-                              <FormControl>
-                                <Input placeholder="非常好, 還可以, 需要改進" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={pollForm.control}
-                            name="triggerTime"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>觸發時間 (分:秒)</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="5:00" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={pollForm.control}
-                            name="duration"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>持續時間（秒）</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="60" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <Button type="submit" disabled={createPoll.isPending}>
-                          {createPoll.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          建立
-                        </Button>
-                      </form>
-                    </Form>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {polls && polls.length > 0 ? (
-                  <div className="space-y-2">
-                    {polls.sort((a, b) => a.triggerTime - b.triggerTime).map((poll) => (
-                      <div key={poll.id} className="flex items-start justify-between p-3 bg-muted rounded-md gap-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {formatTime(poll.triggerTime)}
-                            </Badge>
-                          </div>
-                          <p className="font-medium text-sm mt-1">{poll.question}</p>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {(poll.options as string[]).map((opt, i) => (
-                              <Badge key={i} variant="secondary" className="text-xs">{opt}</Badge>
-                            ))}
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteMutation.mutate({ type: "polls", itemId: poll.id })}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">尚無投票</p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Registrations Tab */}
-          <TabsContent value="registrations">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">報名名單</CardTitle>
-                <CardDescription>已報名參加此直播的觀眾</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {registrations && registrations.length > 0 ? (
-                  <ScrollArea className="h-[400px]">
-                    <div className="space-y-2">
-                      {registrations.map((reg) => (
-                        <div key={reg.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
-                          <div>
-                            <p className="font-medium">{reg.name}</p>
-                            {reg.phone && <p className="text-sm text-muted-foreground">{reg.phone}</p>}
-                            <p className="text-sm text-muted-foreground">{reg.email}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(reg.registeredAt!).toLocaleString("zh-TW")}
-                            </p>
-                            {reg.attended && (
-                              <Badge variant="secondary" className="text-xs mt-1">
-                                <Star className="h-3 w-3 mr-1" />
-                                已參加
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">尚無報名</p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Tips Tab */}
-          <TabsContent value="tips">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="text-base">小提示卡</CardTitle>
-                  <CardDescription>在特定時間點顯示的提示訊息</CardDescription>
-                </div>
-                <Dialog open={isTipOpen} onOpenChange={setIsTipOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" data-testid="button-add-tip">
-                      <Plus className="h-4 w-4 mr-1" />
-                      新增提示
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>新增小提示</DialogTitle>
-                    </DialogHeader>
-                    <Form {...tipForm}>
-                      <form onSubmit={tipForm.handleSubmit((data) => createTip.mutate(data))} className="space-y-4">
-                        <FormField
-                          control={tipForm.control}
-                          name="title"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>標題</FormLabel>
-                              <FormControl>
-                                <Input placeholder="重要提示" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={tipForm.control}
-                          name="content"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>內容</FormLabel>
-                              <FormControl>
-                                <Textarea placeholder="輸入提示內容..." {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={tipForm.control}
-                            name="triggerTime"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>觸發時間 (分:秒)</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="2:30" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={tipForm.control}
-                            name="duration"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>顯示時間（秒）</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="30" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <Button type="submit" disabled={createTip.isPending}>
-                          {createTip.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          建立
-                        </Button>
-                      </form>
-                    </Form>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {tips && tips.length > 0 ? (
-                  <div className="space-y-2">
-                    {tips.sort((a, b) => a.triggerTime - b.triggerTime).map((tip) => (
-                      <div key={tip.id} className="flex items-start justify-between p-3 bg-muted rounded-md gap-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {formatTime(tip.triggerTime)}
-                            </Badge>
-                            <Badge variant="secondary">{tip.duration}秒</Badge>
-                          </div>
-                          <p className="font-medium text-sm mt-1">{tip.title}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{tip.content}</p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteMutation.mutate({ type: "tips", itemId: tip.id })}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">尚無提示</p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Q&A Tab */}
-          <TabsContent value="questions">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">觀眾問答</CardTitle>
-                <CardDescription>觀眾在直播中提交的問題</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {questions && questions.length > 0 ? (
-                  <ScrollArea className="h-[400px]">
-                    <div className="space-y-2">
-                      {questions.map((q) => (
-                        <div key={q.id} className="p-3 bg-muted rounded-md" data-testid={`qa-item-${q.id}`}>
-                          <div className="flex items-center justify-between mb-2 gap-2">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium text-sm">{q.askerName || "匿名"}</span>
-                              <Badge variant={q.answer ? "secondary" : "outline"}>
-                                {q.answer ? "已回覆" : "待回覆"}
-                              </Badge>
-                              {q.isPreset && <Badge variant="secondary">FAQ</Badge>}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              {!q.answer && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    setAnsweringQuestionId(q.id);
-                                    setAnswerInput("");
-                                  }}
-                                  data-testid={`button-answer-${q.id}`}
-                                >
-                                  回覆
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => deleteMutation.mutate({ type: "questions", itemId: q.id })}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </div>
-                          <p className="text-sm">{q.question}</p>
-                          {q.answer && (
-                            <div className="mt-2 pl-3 border-l-2 border-primary">
-                              <p className="text-sm text-muted-foreground">{q.answer}</p>
-                            </div>
-                          )}
-                          {answeringQuestionId === q.id && (
-                            <div className="mt-2 flex gap-2">
-                              <Input
-                                placeholder="輸入回覆..."
-                                value={answerInput}
-                                onChange={(e) => setAnswerInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && answerInput.trim()) {
-                                    answerQuestion.mutate({ questionId: q.id, answer: answerInput.trim() });
-                                  }
-                                }}
-                                data-testid={`input-answer-${q.id}`}
-                              />
-                              <Button
-                                size="sm"
-                                disabled={answerQuestion.isPending || !answerInput.trim()}
-                                onClick={() => answerQuestion.mutate({ questionId: q.id, answer: answerInput.trim() })}
-                                data-testid={`button-submit-answer-${q.id}`}
-                              >
-                                送出
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setAnsweringQuestionId(null)}
-                              >
-                                取消
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">尚無問題</p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Survey Tab */}
-          <TabsContent value="survey">
+          {/* ===== 排程 (Schedule) Tab ===== */}
+          <TabsContent value="schedule">
             <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">排程設定</CardTitle>
+                  <CardDescription>排程模式、時區與重播設定</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-2">
+                    <Label>排程模式</Label>
+                    <Select value={settingsScheduleMode} onValueChange={setSettingsScheduleMode}>
+                      <SelectTrigger data-testid="select-schedule-mode">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fixed">固定時間</SelectItem>
+                        <SelectItem value="onDemand">隨選觀看</SelectItem>
+                        <SelectItem value="justInTime">即時開始</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {settingsScheduleMode === "justInTime" && (
+                    <div className="space-y-2">
+                      <Label>即時開始分鐘數</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={settingsJitMinutes}
+                        onChange={(e) => setSettingsJitMinutes(e.target.value)}
+                        data-testid="input-jit-minutes"
+                      />
+                      <p className="text-xs text-muted-foreground">觀眾進入後，下一場將在此分鐘數內開始</p>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label>時區</Label>
+                    <Select value={settingsTimezone} onValueChange={setSettingsTimezone}>
+                      <SelectTrigger data-testid="select-timezone">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Asia/Taipei">Asia/Taipei (台北)</SelectItem>
+                        <SelectItem value="Asia/Tokyo">Asia/Tokyo (東京)</SelectItem>
+                        <SelectItem value="Asia/Shanghai">Asia/Shanghai (上海)</SelectItem>
+                        <SelectItem value="Asia/Hong_Kong">Asia/Hong_Kong (香港)</SelectItem>
+                        <SelectItem value="America/New_York">America/New_York (紐約)</SelectItem>
+                        <SelectItem value="America/Los_Angeles">America/Los_Angeles (洛杉磯)</SelectItem>
+                        <SelectItem value="Europe/London">Europe/London (倫敦)</SelectItem>
+                        <SelectItem value="Europe/Paris">Europe/Paris (巴黎)</SelectItem>
+                        <SelectItem value="Australia/Sydney">Australia/Sydney (雪梨)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>啟用重播</Label>
+                      <Switch
+                        checked={settingsReplayEnabled}
+                        onCheckedChange={setSettingsReplayEnabled}
+                        data-testid="switch-replay-enabled"
+                      />
+                    </div>
+                    {settingsReplayEnabled && (
+                      <div className="space-y-2">
+                        <Label>重播可用時數</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={settingsReplayHours}
+                          onChange={(e) => setSettingsReplayHours(e.target.value)}
+                          data-testid="input-replay-hours"
+                        />
+                        <p className="text-xs text-muted-foreground">直播結束後，重播影片的可用時數</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    onClick={() => {
+                      const scheduleMode = {
+                        recurring: false,
+                        onDemand: settingsScheduleMode === "onDemand",
+                        justInTime: settingsScheduleMode === "justInTime",
+                        justInTimeMinutes: settingsScheduleMode === "justInTime" ? parseInt(settingsJitMinutes) || 15 : 15,
+                      };
+                      updateWebinar.mutate({
+                        scheduleMode,
+                        timezone: settingsTimezone,
+                        replayEnabled: settingsReplayEnabled,
+                        replayAvailableHours: parseInt(settingsReplayHours) || 48,
+                      });
+                    }}
+                    disabled={updateWebinar.isPending}
+                    data-testid="button-save-settings"
+                  >
+                    {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    儲存排程設定
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    場次管理
+                  </CardTitle>
+                  <CardDescription>新增直播場次讓觀眾在報名時自行選擇</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Input
+                      type="datetime-local"
+                      value={newSessionDate}
+                      onChange={(e) => setNewSessionDate(e.target.value)}
+                      data-testid="input-new-session-date"
+                    />
+                    <Button
+                      onClick={async () => {
+                        if (!newSessionDate) return;
+                        try {
+                          await apiRequest("POST", `/api/webinars/${id}/sessions`, {
+                            scheduledStart: new Date(newSessionDate).toISOString(),
+                          });
+                          queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
+                          setNewSessionDate("");
+                          toast({ title: "場次已新增" });
+                        } catch (err: any) {
+                          toast({ title: "新增失敗", description: err.message, variant: "destructive" });
+                        }
+                      }}
+                      disabled={!newSessionDate}
+                      data-testid="button-add-session"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      新增場次
+                    </Button>
+                  </div>
+
+                  {webinarSessions && webinarSessions.length > 0 ? (
+                    <div className="space-y-2">
+                      {webinarSessions.map((session) => (
+                        <div key={session.id} className="flex items-center justify-between gap-2 p-3 bg-muted rounded-md">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm">
+                              {new Date(session.scheduledStart).toLocaleString("zh-TW", {
+                                year: "numeric", month: "2-digit", day: "2-digit",
+                                hour: "2-digit", minute: "2-digit",
+                              })}
+                            </span>
+                            <Badge variant={
+                              new Date(session.scheduledStart) > new Date() ? "default" : "secondary"
+                            }>
+                              {new Date(session.scheduledStart) > new Date() ? "即將到來" : "已過期"}
+                            </Badge>
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={async () => {
+                              try {
+                                await apiRequest("DELETE", `/api/webinars/${id}/sessions/${session.id}`);
+                                queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
+                                toast({ title: "場次已刪除" });
+                              } catch (err: any) {
+                                toast({ title: "刪除失敗", description: err.message, variant: "destructive" });
+                              }
+                            }}
+                            data-testid={`button-delete-session-${session.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-2">尚未新增場次，觀眾將無法選擇時段</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    循環排程
+                  </CardTitle>
+                  <CardDescription>自動產生定期直播場次</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>啟用循環排程</Label>
+                    <Switch
+                      checked={recurringEnabled}
+                      onCheckedChange={setRecurringEnabled}
+                      data-testid="switch-recurring-enabled"
+                    />
+                  </div>
+                  {recurringEnabled && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>每週播放日</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {["日", "一", "二", "三", "四", "五", "六"].map((day, i) => (
+                            <Button
+                              key={i}
+                              size="sm"
+                              variant={recurringDays.includes(i) ? "default" : "outline"}
+                              onClick={() => {
+                                setRecurringDays(prev =>
+                                  prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i].sort()
+                                );
+                              }}
+                              data-testid={`button-recurring-day-${i}`}
+                            >
+                              {day}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>播放時間（多個時間用逗號分隔）</Label>
+                        <Input
+                          value={recurringTimes}
+                          onChange={(e) => setRecurringTimes(e.target.value)}
+                          placeholder="09:00, 14:00, 19:00"
+                          data-testid="input-recurring-times"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>排除日期（用逗號分隔）</Label>
+                        <Input
+                          value={recurringExcludeDates}
+                          onChange={(e) => setRecurringExcludeDates(e.target.value)}
+                          placeholder="2026-01-01, 2026-02-14"
+                          data-testid="input-recurring-exclude"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          onClick={() => {
+                            updateWebinar.mutate({
+                              recurringSchedule: {
+                                enabled: recurringEnabled,
+                                days: recurringDays,
+                                times: recurringTimes.split(",").map(t => t.trim()).filter(Boolean),
+                                excludeDates: recurringExcludeDates.split(",").map(d => d.trim()).filter(Boolean),
+                              },
+                            });
+                          }}
+                          disabled={updateWebinar.isPending}
+                          data-testid="button-save-recurring"
+                        >
+                          {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          儲存循環排程
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            apiRequest("POST", `/api/webinars/${id}/generate-sessions`, { days: 30 })
+                              .then(() => {
+                                toast({ title: "已產生未來 30 天的場次" });
+                              })
+                              .catch((err: any) => {
+                                toast({ title: "產生場次失敗", description: err.message, variant: "destructive" });
+                              });
+                          }}
+                          data-testid="button-generate-sessions"
+                        >
+                          <RefreshCw className="h-4 w-4 mr-1" />
+                          產生未來 30 天場次
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ===== 通知 (Notifications) Tab ===== */}
+          <TabsContent value="notifications">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Mail className="h-4 w-4" />
+                    郵件設定
+                  </CardTitle>
+                  <CardDescription>控制自動郵件通知的開關和內容</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>報名確認信</Label>
+                      <Switch
+                        checked={emailConfirmation}
+                        onCheckedChange={setEmailConfirmation}
+                        data-testid="switch-email-confirmation"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>24 小時前提醒</Label>
+                      <Switch
+                        checked={emailReminder24h}
+                        onCheckedChange={setEmailReminder24h}
+                        data-testid="switch-email-24h"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>1 小時前提醒</Label>
+                      <Switch
+                        checked={emailReminder1h}
+                        onCheckedChange={setEmailReminder1h}
+                        data-testid="switch-email-1h"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>結束後跟進信</Label>
+                      <Switch
+                        checked={emailFollowUp}
+                        onCheckedChange={setEmailFollowUp}
+                        data-testid="switch-email-followup"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>自訂郵件主旨（選填）</Label>
+                    <Input
+                      value={emailCustomSubject}
+                      onChange={(e) => setEmailCustomSubject(e.target.value)}
+                      placeholder="留空使用預設主旨"
+                      data-testid="input-email-subject"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>自訂郵件模板（選填）</Label>
+                    <Textarea
+                      value={emailCustomTemplate}
+                      onChange={(e) => setEmailCustomTemplate(e.target.value)}
+                      placeholder="留空使用預設模板，支援 HTML"
+                      rows={4}
+                      data-testid="input-email-template"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => {
+                      updateWebinar.mutate({
+                        emailSettings: {
+                          confirmationEnabled: emailConfirmation,
+                          reminder24hEnabled: emailReminder24h,
+                          reminder1hEnabled: emailReminder1h,
+                          followUpEnabled: emailFollowUp,
+                          customSubject: emailCustomSubject,
+                          customTemplate: emailCustomTemplate,
+                        },
+                      });
+                    }}
+                    disabled={updateWebinar.isPending}
+                    data-testid="button-save-email"
+                  >
+                    {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    儲存郵件設定
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Link2 className="h-4 w-4" />
+                      Webhook 管理
+                    </CardTitle>
+                    <CardDescription>設定事件觸發時自動通知的 Webhook</CardDescription>
+                  </div>
+                  <Dialog open={isWebhookOpen} onOpenChange={setIsWebhookOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" data-testid="button-add-webhook">
+                        <Plus className="h-4 w-4 mr-1" />
+                        新增 Webhook
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>新增 Webhook</DialogTitle>
+                        <DialogDescription>當指定事件發生時，系統會向目標網址發送 POST 請求</DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>事件類型</Label>
+                          <Select value={newWebhookEvent} onValueChange={setNewWebhookEvent}>
+                            <SelectTrigger data-testid="select-webhook-event">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="registration">報名 (registration)</SelectItem>
+                              <SelectItem value="attendance">出席 (attendance)</SelectItem>
+                              <SelectItem value="completion">完播 (completion)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>目標網址</Label>
+                          <Input
+                            value={newWebhookUrl}
+                            onChange={(e) => setNewWebhookUrl(e.target.value)}
+                            placeholder="https://example.com/webhook"
+                            data-testid="input-webhook-url"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>密鑰（選填）</Label>
+                          <Input
+                            value={newWebhookSecret}
+                            onChange={(e) => setNewWebhookSecret(e.target.value)}
+                            placeholder="用於驗證請求來源"
+                            data-testid="input-webhook-secret"
+                          />
+                        </div>
+                        <Button
+                          onClick={() => {
+                            if (!newWebhookUrl) {
+                              toast({ title: "請輸入目標網址", variant: "destructive" });
+                              return;
+                            }
+                            createWebhook.mutate({
+                              webinarId: id!,
+                              eventType: newWebhookEvent,
+                              targetUrl: newWebhookUrl,
+                              secret: newWebhookSecret,
+                              enabled: true,
+                            });
+                          }}
+                          disabled={createWebhook.isPending || !newWebhookUrl}
+                          data-testid="button-submit-webhook"
+                        >
+                          {createWebhook.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          建立
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  {webhooks && webhooks.length > 0 ? (
+                    <div className="space-y-2">
+                      {webhooks.map((hook) => (
+                        <div key={hook.id} className="flex items-center justify-between p-3 bg-muted rounded-md gap-2" data-testid={`webhook-item-${hook.id}`}>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="outline">{hook.eventType}</Badge>
+                              <Badge variant={hook.enabled ? "default" : "secondary"}>
+                                {hook.enabled ? "啟用" : "停用"}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 truncate">{hook.targetUrl}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteWebhook.mutate(hook.id)}
+                            data-testid={`button-delete-webhook-${hook.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">尚無 Webhook</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ===== 互動 (Interactions) Tab ===== */}
+          <TabsContent value="interactions">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base">CTA 按鈕</CardTitle>
+                    <CardDescription>在影片上顯示行動呼籲按鈕</CardDescription>
+                  </div>
+                  <Dialog open={isCtaOpen} onOpenChange={setIsCtaOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" data-testid="button-add-cta">
+                        <Plus className="h-4 w-4 mr-1" />
+                        新增 CTA
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>新增 CTA 按鈕</DialogTitle>
+                      </DialogHeader>
+                      <Form {...ctaForm}>
+                        <form onSubmit={ctaForm.handleSubmit((data) => createCta.mutate(data))} className="space-y-4">
+                          <FormField
+                            control={ctaForm.control}
+                            name="text"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>按鈕文字</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="立即報名" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={ctaForm.control}
+                            name="url"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>連結網址</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="https://..." {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="grid grid-cols-2 gap-4">
+                            <FormField
+                              control={ctaForm.control}
+                              name="startTime"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>開始時間 (分:秒)</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="5:00" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={ctaForm.control}
+                              name="endTime"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>結束時間（選填）</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="10:00" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <FormField
+                            control={ctaForm.control}
+                            name="style"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>樣式</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="primary">主要（藍色）</SelectItem>
+                                    <SelectItem value="secondary">次要（灰色）</SelectItem>
+                                    <SelectItem value="danger">強調（紅色）</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <Button type="submit" disabled={createCta.isPending}>
+                            {createCta.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            建立
+                          </Button>
+                        </form>
+                      </Form>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  {ctas && ctas.length > 0 ? (
+                    <div className="space-y-2">
+                      {ctas.sort((a, b) => a.startTime - b.startTime).map((cta) => (
+                        <div key={cta.id} className="flex items-center justify-between p-3 bg-muted rounded-md gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">
+                                {formatTime(cta.startTime)} - {cta.endTime ? formatTime(cta.endTime) : "結束"}
+                              </Badge>
+                              <Badge variant={cta.style === "primary" ? "default" : cta.style === "danger" ? "destructive" : "secondary"}>
+                                {cta.text}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 truncate">{cta.url}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteMutation.mutate({ type: "ctas", itemId: cta.id })}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">尚無 CTA 按鈕</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base">投票管理</CardTitle>
+                    <CardDescription>設定在特定時間彈出的投票問題</CardDescription>
+                  </div>
+                  <Dialog open={isPollOpen} onOpenChange={setIsPollOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" data-testid="button-add-poll">
+                        <Plus className="h-4 w-4 mr-1" />
+                        新增投票
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>新增投票</DialogTitle>
+                      </DialogHeader>
+                      <Form {...pollForm}>
+                        <form onSubmit={pollForm.handleSubmit((data) => createPoll.mutate(data))} className="space-y-4">
+                          <FormField
+                            control={pollForm.control}
+                            name="question"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>問題</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="您覺得這個課程如何？" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={pollForm.control}
+                            name="options"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>選項（用逗號分隔）</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="非常好, 還可以, 需要改進" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="grid grid-cols-2 gap-4">
+                            <FormField
+                              control={pollForm.control}
+                              name="triggerTime"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>觸發時間 (分:秒)</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="5:00" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={pollForm.control}
+                              name="duration"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>持續時間（秒）</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="60" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <Button type="submit" disabled={createPoll.isPending}>
+                            {createPoll.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            建立
+                          </Button>
+                        </form>
+                      </Form>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  {polls && polls.length > 0 ? (
+                    <div className="space-y-2">
+                      {polls.sort((a, b) => a.triggerTime - b.triggerTime).map((poll) => (
+                        <div key={poll.id} className="flex items-start justify-between p-3 bg-muted rounded-md gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {formatTime(poll.triggerTime)}
+                              </Badge>
+                            </div>
+                            <p className="font-medium text-sm mt-1">{poll.question}</p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {(poll.options as string[]).map((opt, i) => (
+                                <Badge key={i} variant="secondary" className="text-xs">{opt}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteMutation.mutate({ type: "polls", itemId: poll.id })}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">尚無投票</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base">小提示卡</CardTitle>
+                    <CardDescription>在特定時間點顯示的提示訊息</CardDescription>
+                  </div>
+                  <Dialog open={isTipOpen} onOpenChange={setIsTipOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" data-testid="button-add-tip">
+                        <Plus className="h-4 w-4 mr-1" />
+                        新增提示
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>新增小提示</DialogTitle>
+                      </DialogHeader>
+                      <Form {...tipForm}>
+                        <form onSubmit={tipForm.handleSubmit((data) => createTip.mutate(data))} className="space-y-4">
+                          <FormField
+                            control={tipForm.control}
+                            name="title"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>標題</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="重要提示" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={tipForm.control}
+                            name="content"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>內容</FormLabel>
+                                <FormControl>
+                                  <Textarea placeholder="輸入提示內容..." {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="grid grid-cols-2 gap-4">
+                            <FormField
+                              control={tipForm.control}
+                              name="triggerTime"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>觸發時間 (分:秒)</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="2:30" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={tipForm.control}
+                              name="duration"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>顯示時間（秒）</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="30" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <Button type="submit" disabled={createTip.isPending}>
+                            {createTip.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            建立
+                          </Button>
+                        </form>
+                      </Form>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  {tips && tips.length > 0 ? (
+                    <div className="space-y-2">
+                      {tips.sort((a, b) => a.triggerTime - b.triggerTime).map((tip) => (
+                        <div key={tip.id} className="flex items-start justify-between p-3 bg-muted rounded-md gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {formatTime(tip.triggerTime)}
+                              </Badge>
+                              <Badge variant="secondary">{tip.duration}秒</Badge>
+                            </div>
+                            <p className="font-medium text-sm mt-1">{tip.title}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{tip.content}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteMutation.mutate({ type: "tips", itemId: tip.id })}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">尚無提示</p>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">回饋問卷</CardTitle>
@@ -1542,10 +1685,345 @@ export default function AdminWebinarDetail() {
                   </CardContent>
                 </Card>
               )}
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">觀眾問答</CardTitle>
+                  <CardDescription>觀眾在直播中提交的問題</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {questions && questions.length > 0 ? (
+                    <ScrollArea className="h-[400px]">
+                      <div className="space-y-2">
+                        {questions.map((q) => (
+                          <div key={q.id} className="p-3 bg-muted rounded-md" data-testid={`qa-item-${q.id}`}>
+                            <div className="flex items-center justify-between mb-2 gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-sm">{q.askerName || "匿名"}</span>
+                                <Badge variant={q.answer ? "secondary" : "outline"}>
+                                  {q.answer ? "已回覆" : "待回覆"}
+                                </Badge>
+                                {q.isPreset && <Badge variant="secondary">FAQ</Badge>}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {!q.answer && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setAnsweringQuestionId(q.id);
+                                      setAnswerInput("");
+                                    }}
+                                    data-testid={`button-answer-${q.id}`}
+                                  >
+                                    回覆
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => deleteMutation.mutate({ type: "questions", itemId: q.id })}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-sm">{q.question}</p>
+                            {q.answer && (
+                              <div className="mt-2 pl-3 border-l-2 border-primary">
+                                <p className="text-sm text-muted-foreground">{q.answer}</p>
+                              </div>
+                            )}
+                            {answeringQuestionId === q.id && (
+                              <div className="mt-2 flex gap-2">
+                                <Input
+                                  placeholder="輸入回覆..."
+                                  value={answerInput}
+                                  onChange={(e) => setAnswerInput(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && answerInput.trim()) {
+                                      answerQuestion.mutate({ questionId: q.id, answer: answerInput.trim() });
+                                    }
+                                  }}
+                                  data-testid={`input-answer-${q.id}`}
+                                />
+                                <Button
+                                  size="sm"
+                                  disabled={answerQuestion.isPending || !answerInput.trim()}
+                                  onClick={() => answerQuestion.mutate({ questionId: q.id, answer: answerInput.trim() })}
+                                  data-testid={`button-submit-answer-${q.id}`}
+                                >
+                                  送出
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setAnsweringQuestionId(null)}
+                                >
+                                  取消
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">尚無問題</p>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
 
-          {/* Analytics Tab */}
+          {/* ===== 聊天 (Chat) Tab ===== */}
+          <TabsContent value="chat">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base">假人管理</CardTitle>
+                    <CardDescription>建立虛擬觀眾以營造熱絡氣氛</CardDescription>
+                  </div>
+                  <Dialog open={isFakeUserOpen} onOpenChange={setIsFakeUserOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" data-testid="button-add-fake-user">
+                        <Plus className="h-4 w-4 mr-1" />
+                        新增假人
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>新增假人</DialogTitle>
+                      </DialogHeader>
+                      <Form {...fakeUserForm}>
+                        <form onSubmit={fakeUserForm.handleSubmit((data) => createFakeUser.mutate(data))} className="space-y-4">
+                          <FormField
+                            control={fakeUserForm.control}
+                            name="name"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>名稱</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="小明" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <Button type="submit" disabled={createFakeUser.isPending}>
+                            {createFakeUser.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            建立
+                          </Button>
+                        </form>
+                      </Form>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  {fakeUsers && fakeUsers.length > 0 ? (
+                    <div className="space-y-2">
+                      {fakeUsers.map((user) => (
+                        <div key={user.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
+                          <span className="font-medium">{user.name}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteMutation.mutate({ type: "fake-users", itemId: user.id })}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">尚無假人</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base">預排訊息</CardTitle>
+                    <CardDescription>設定在特定時間自動發送的訊息</CardDescription>
+                  </div>
+                  <Dialog open={isMessageOpen} onOpenChange={setIsMessageOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" data-testid="button-add-scheduled-message">
+                        <Plus className="h-4 w-4 mr-1" />
+                        新增訊息
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>新增預排訊息</DialogTitle>
+                      </DialogHeader>
+                      <Form {...messageForm}>
+                        <form onSubmit={messageForm.handleSubmit((data) => createMessage.mutate(data))} className="space-y-4">
+                          <FormField
+                            control={messageForm.control}
+                            name="fakeUserId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>發送者</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="選擇假人" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {fakeUsers?.map((user) => (
+                                      <SelectItem key={user.id} value={user.id}>
+                                        {user.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={messageForm.control}
+                            name="message"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>訊息內容</FormLabel>
+                                <FormControl>
+                                  <Textarea placeholder="太棒了！" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={messageForm.control}
+                            name="triggerTime"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>觸發時間 (分:秒)</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="2:30" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <Button type="submit" disabled={createMessage.isPending}>
+                            {createMessage.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            建立
+                          </Button>
+                        </form>
+                      </Form>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  {scheduledMessages && scheduledMessages.length > 0 ? (
+                    <ScrollArea className="h-[400px]">
+                      <div className="space-y-2">
+                        {scheduledMessages.sort((a, b) => a.triggerTime - b.triggerTime).map((msg) => {
+                          const sender = fakeUsers?.find(u => u.id === msg.fakeUserId);
+                          return (
+                            <div key={msg.id} className="flex items-start justify-between p-3 bg-muted rounded-md gap-2">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    {formatTime(msg.triggerTime)}
+                                  </Badge>
+                                  <span className="font-medium text-sm">{sender?.name || "未知"}</span>
+                                </div>
+                                <p className="text-sm text-muted-foreground mt-1">{msg.message}</p>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => deleteMutation.mutate({ type: "scheduled-messages", itemId: msg.id })}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">尚無預排訊息</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ===== 報名 (Registration) Tab ===== */}
+          <TabsContent value="registrations">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-base">報名名單</CardTitle>
+                  <CardDescription>已報名參加此直播的觀眾</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => window.open(`/api/webinars/${id}/registrations/export`, "_blank")} data-testid="button-export-csv">
+                  <Download className="h-4 w-4 mr-1" />
+                  匯出 CSV
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {registrations && registrations.length > 0 ? (
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-2">
+                      {registrations.map((reg) => (
+                        <div key={reg.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
+                          <div>
+                            <p className="font-medium">{reg.name}</p>
+                            {reg.phone && <p className="text-sm text-muted-foreground">{reg.phone}</p>}
+                            <p className="text-sm text-muted-foreground">{reg.email}</p>
+                            {(reg.utmSource || reg.utmMedium || reg.utmCampaign) && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {reg.utmSource && (
+                                  <Badge variant="outline" className="text-xs">
+                                    來源: {reg.utmSource}
+                                  </Badge>
+                                )}
+                                {reg.utmMedium && (
+                                  <Badge variant="outline" className="text-xs">
+                                    媒介: {reg.utmMedium}
+                                  </Badge>
+                                )}
+                                {reg.utmCampaign && (
+                                  <Badge variant="outline" className="text-xs">
+                                    活動: {reg.utmCampaign}
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(reg.registeredAt!).toLocaleString("zh-TW")}
+                            </p>
+                            {reg.attended && (
+                              <Badge variant="secondary" className="text-xs mt-1">
+                                <Star className="h-3 w-3 mr-1" />
+                                已參加
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">尚無報名</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ===== 分析 (Analytics) Tab ===== */}
           <TabsContent value="analytics">
             {analytics ? (
               <div className="space-y-6">
@@ -1787,12 +2265,253 @@ export default function AdminWebinarDetail() {
             )}
           </TabsContent>
 
-          {/* Embed Tab */}
-          <TabsContent value="embed">
+          {/* ===== 設定 (Settings) Tab ===== */}
+          <TabsContent value="settings">
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">嵌入報名表單</CardTitle>
+                  <CardTitle className="text-base">直播資訊</CardTitle>
+                  <CardDescription>編輯直播標題、描述、影片網址與封面圖片</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>直播標題</Label>
+                    <Input
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      placeholder="直播標題"
+                      data-testid="input-settings-title"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>直播描述</Label>
+                    <Textarea
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      placeholder="直播描述（選填）"
+                      className="resize-none"
+                      rows={3}
+                      data-testid="input-settings-description"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Vimeo 網址</Label>
+                    <Input
+                      value={editVimeoUrl}
+                      onChange={(e) => setEditVimeoUrl(e.target.value)}
+                      placeholder="Vimeo 網址"
+                      data-testid="input-settings-vimeo"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>開始時間</Label>
+                    <Input
+                      type="datetime-local"
+                      value={editStartTime}
+                      onChange={(e) => setEditStartTime(e.target.value)}
+                      data-testid="input-settings-start-time"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>封面圖片</Label>
+                    {editCoverImage ? (
+                      <div className="relative rounded-md overflow-hidden border">
+                        <img src={editCoverImage} alt="封面預覽" className="w-full h-32 object-cover" />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm"
+                          onClick={() => setEditCoverImage("")}
+                          data-testid="button-settings-remove-cover"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div
+                        className="border-2 border-dashed rounded-md p-4 flex flex-col items-center justify-center gap-2 cursor-pointer hover-elevate"
+                        onClick={() => coverFileRef.current?.click()}
+                        data-testid="button-settings-upload-cover-area"
+                      >
+                        <ImagePlus className="h-6 w-6 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">點擊上傳封面圖片</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={editCoverImage}
+                        onChange={(e) => setEditCoverImage(e.target.value)}
+                        placeholder="或輸入圖片網址"
+                        className="flex-1 text-xs"
+                        data-testid="input-settings-cover"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => coverFileRef.current?.click()}
+                        disabled={uploadingCover}
+                        data-testid="button-settings-upload-cover"
+                      >
+                        <Upload className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      const oldCover = webinar.coverImage;
+                      const newCover = editCoverImage || null;
+                      if (oldCover && oldCover.startsWith("/uploads/") && oldCover !== newCover) {
+                        try {
+                          await fetch("/api/upload", {
+                            method: "DELETE",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ url: oldCover }),
+                          });
+                        } catch {}
+                      }
+                      updateWebinar.mutate({
+                        title: editTitle,
+                        description: editDescription || null,
+                        vimeoUrl: editVimeoUrl,
+                        startTime: new Date(editStartTime).toISOString(),
+                        coverImage: newCover,
+                      });
+                    }}
+                    disabled={updateWebinar.isPending || !editTitle || !editVimeoUrl}
+                    data-testid="button-save-webinar-info"
+                  >
+                    {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    儲存直播資訊
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Palette className="h-4 w-4" />
+                    品牌設定
+                  </CardTitle>
+                  <CardDescription>自訂直播間的外觀和品牌元素</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Logo 網址</Label>
+                    <Input
+                      value={brandLogo}
+                      onChange={(e) => setBrandLogo(e.target.value)}
+                      placeholder="https://example.com/logo.png"
+                      data-testid="input-brand-logo"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>主色調</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={brandPrimaryColor}
+                          onChange={(e) => setBrandPrimaryColor(e.target.value)}
+                          className="w-10 h-10 rounded-md border cursor-pointer"
+                          data-testid="input-brand-primary-color"
+                        />
+                        <Input
+                          value={brandPrimaryColor}
+                          onChange={(e) => setBrandPrimaryColor(e.target.value)}
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>副色調</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={brandSecondaryColor}
+                          onChange={(e) => setBrandSecondaryColor(e.target.value)}
+                          className="w-10 h-10 rounded-md border cursor-pointer"
+                          data-testid="input-brand-secondary-color"
+                        />
+                        <Input
+                          value={brandSecondaryColor}
+                          onChange={(e) => setBrandSecondaryColor(e.target.value)}
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>背景色</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={brandBackgroundColor}
+                          onChange={(e) => setBrandBackgroundColor(e.target.value)}
+                          className="w-10 h-10 rounded-md border cursor-pointer"
+                          data-testid="input-brand-bg-color"
+                        />
+                        <Input
+                          value={brandBackgroundColor}
+                          onChange={(e) => setBrandBackgroundColor(e.target.value)}
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {brandLogo && (
+                    <div className="p-3 bg-muted rounded-md">
+                      <p className="text-xs text-muted-foreground mb-2">Logo 預覽：</p>
+                      <img src={brandLogo} alt="Logo preview" className="max-h-16 object-contain" />
+                    </div>
+                  )}
+                  <Button
+                    onClick={() => {
+                      updateWebinar.mutate({
+                        brandSettings: {
+                          logo: brandLogo,
+                          watermark: "",
+                          primaryColor: brandPrimaryColor,
+                          secondaryColor: brandSecondaryColor,
+                          backgroundColor: brandBackgroundColor,
+                        },
+                      });
+                    }}
+                    disabled={updateWebinar.isPending}
+                    data-testid="button-save-brand"
+                  >
+                    {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    儲存品牌設定
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Globe className="h-4 w-4" />
+                    直播連結
+                  </CardTitle>
+                  <CardDescription>分享報名連結給觀眾</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Input value={registrationUrl} readOnly className="flex-1" />
+                    <Button variant="outline" size="icon" onClick={() => copyToClipboard(registrationUrl)}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={() => window.open(registrationUrl, "_blank")}>
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">將此報名連結分享給觀眾</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Code className="h-4 w-4" />
+                    嵌入報名表單
+                  </CardTitle>
                   <CardDescription>將報名表單嵌入到其他網站，訪客可以直接在你的網站上報名</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -1955,478 +2674,6 @@ export default function AdminWebinarDetail() {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">報名表單會自動嵌入到該容器中，支援時段選擇、品牌設定，並且會自動調整高度。</p>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Settings Tab */}
-          <TabsContent value="settings">
-            <div className="space-y-6">
-              {/* Existing schedule/timezone/replay settings */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">排程設定</CardTitle>
-                  <CardDescription>排程模式、時區與重播設定</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-2">
-                    <Label>排程模式</Label>
-                    <Select value={settingsScheduleMode} onValueChange={setSettingsScheduleMode}>
-                      <SelectTrigger data-testid="select-schedule-mode">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fixed">固定時間</SelectItem>
-                        <SelectItem value="onDemand">隨選觀看</SelectItem>
-                        <SelectItem value="justInTime">即時開始</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {settingsScheduleMode === "justInTime" && (
-                    <div className="space-y-2">
-                      <Label>即時開始分鐘數</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={settingsJitMinutes}
-                        onChange={(e) => setSettingsJitMinutes(e.target.value)}
-                        data-testid="input-jit-minutes"
-                      />
-                      <p className="text-xs text-muted-foreground">觀眾進入後，下一場將在此分鐘數內開始</p>
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label>時區</Label>
-                    <Select value={settingsTimezone} onValueChange={setSettingsTimezone}>
-                      <SelectTrigger data-testid="select-timezone">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Asia/Taipei">Asia/Taipei (台北)</SelectItem>
-                        <SelectItem value="Asia/Tokyo">Asia/Tokyo (東京)</SelectItem>
-                        <SelectItem value="Asia/Shanghai">Asia/Shanghai (上海)</SelectItem>
-                        <SelectItem value="Asia/Hong_Kong">Asia/Hong_Kong (香港)</SelectItem>
-                        <SelectItem value="America/New_York">America/New_York (紐約)</SelectItem>
-                        <SelectItem value="America/Los_Angeles">America/Los_Angeles (洛杉磯)</SelectItem>
-                        <SelectItem value="Europe/London">Europe/London (倫敦)</SelectItem>
-                        <SelectItem value="Europe/Paris">Europe/Paris (巴黎)</SelectItem>
-                        <SelectItem value="Australia/Sydney">Australia/Sydney (雪梨)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <Label>啟用重播</Label>
-                      <Switch
-                        checked={settingsReplayEnabled}
-                        onCheckedChange={setSettingsReplayEnabled}
-                        data-testid="switch-replay-enabled"
-                      />
-                    </div>
-                    {settingsReplayEnabled && (
-                      <div className="space-y-2">
-                        <Label>重播可用時數</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={settingsReplayHours}
-                          onChange={(e) => setSettingsReplayHours(e.target.value)}
-                          data-testid="input-replay-hours"
-                        />
-                        <p className="text-xs text-muted-foreground">直播結束後，重播影片的可用時數</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <Button
-                    onClick={() => {
-                      const scheduleMode = {
-                        recurring: false,
-                        onDemand: settingsScheduleMode === "onDemand",
-                        justInTime: settingsScheduleMode === "justInTime",
-                        justInTimeMinutes: settingsScheduleMode === "justInTime" ? parseInt(settingsJitMinutes) || 15 : 15,
-                      };
-                      updateWebinar.mutate({
-                        scheduleMode,
-                        timezone: settingsTimezone,
-                        replayEnabled: settingsReplayEnabled,
-                        replayAvailableHours: parseInt(settingsReplayHours) || 48,
-                      });
-                    }}
-                    disabled={updateWebinar.isPending}
-                    data-testid="button-save-settings"
-                  >
-                    {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    儲存排程設定
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Brand Settings */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Palette className="h-4 w-4" />
-                    品牌設定
-                  </CardTitle>
-                  <CardDescription>自訂直播間的外觀和品牌元素</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Logo 網址</Label>
-                    <Input
-                      value={brandLogo}
-                      onChange={(e) => setBrandLogo(e.target.value)}
-                      placeholder="https://example.com/logo.png"
-                      data-testid="input-brand-logo"
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>主色調</Label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={brandPrimaryColor}
-                          onChange={(e) => setBrandPrimaryColor(e.target.value)}
-                          className="w-10 h-10 rounded-md border cursor-pointer"
-                          data-testid="input-brand-primary-color"
-                        />
-                        <Input
-                          value={brandPrimaryColor}
-                          onChange={(e) => setBrandPrimaryColor(e.target.value)}
-                          className="flex-1"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>副色調</Label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={brandSecondaryColor}
-                          onChange={(e) => setBrandSecondaryColor(e.target.value)}
-                          className="w-10 h-10 rounded-md border cursor-pointer"
-                          data-testid="input-brand-secondary-color"
-                        />
-                        <Input
-                          value={brandSecondaryColor}
-                          onChange={(e) => setBrandSecondaryColor(e.target.value)}
-                          className="flex-1"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>背景色</Label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={brandBackgroundColor}
-                          onChange={(e) => setBrandBackgroundColor(e.target.value)}
-                          className="w-10 h-10 rounded-md border cursor-pointer"
-                          data-testid="input-brand-bg-color"
-                        />
-                        <Input
-                          value={brandBackgroundColor}
-                          onChange={(e) => setBrandBackgroundColor(e.target.value)}
-                          className="flex-1"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  {brandLogo && (
-                    <div className="p-3 bg-muted rounded-md">
-                      <p className="text-xs text-muted-foreground mb-2">Logo 預覽：</p>
-                      <img src={brandLogo} alt="Logo preview" className="max-h-16 object-contain" />
-                    </div>
-                  )}
-                  <Button
-                    onClick={() => {
-                      updateWebinar.mutate({
-                        brandSettings: {
-                          logo: brandLogo,
-                          watermark: "",
-                          primaryColor: brandPrimaryColor,
-                          secondaryColor: brandSecondaryColor,
-                          backgroundColor: brandBackgroundColor,
-                        },
-                      });
-                    }}
-                    disabled={updateWebinar.isPending}
-                    data-testid="button-save-brand"
-                  >
-                    {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    儲存品牌設定
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Email Settings */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Mail className="h-4 w-4" />
-                    郵件設定
-                  </CardTitle>
-                  <CardDescription>控制自動郵件通知的開關和內容</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <Label>報名確認信</Label>
-                      <Switch
-                        checked={emailConfirmation}
-                        onCheckedChange={setEmailConfirmation}
-                        data-testid="switch-email-confirmation"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <Label>24 小時前提醒</Label>
-                      <Switch
-                        checked={emailReminder24h}
-                        onCheckedChange={setEmailReminder24h}
-                        data-testid="switch-email-24h"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <Label>1 小時前提醒</Label>
-                      <Switch
-                        checked={emailReminder1h}
-                        onCheckedChange={setEmailReminder1h}
-                        data-testid="switch-email-1h"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <Label>結束後跟進信</Label>
-                      <Switch
-                        checked={emailFollowUp}
-                        onCheckedChange={setEmailFollowUp}
-                        data-testid="switch-email-followup"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>自訂郵件主旨（選填）</Label>
-                    <Input
-                      value={emailCustomSubject}
-                      onChange={(e) => setEmailCustomSubject(e.target.value)}
-                      placeholder="留空使用預設主旨"
-                      data-testid="input-email-subject"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>自訂郵件模板（選填）</Label>
-                    <Textarea
-                      value={emailCustomTemplate}
-                      onChange={(e) => setEmailCustomTemplate(e.target.value)}
-                      placeholder="留空使用預設模板，支援 HTML"
-                      rows={4}
-                      data-testid="input-email-template"
-                    />
-                  </div>
-                  <Button
-                    onClick={() => {
-                      updateWebinar.mutate({
-                        emailSettings: {
-                          confirmationEnabled: emailConfirmation,
-                          reminder24hEnabled: emailReminder24h,
-                          reminder1hEnabled: emailReminder1h,
-                          followUpEnabled: emailFollowUp,
-                          customSubject: emailCustomSubject,
-                          customTemplate: emailCustomTemplate,
-                        },
-                      });
-                    }}
-                    disabled={updateWebinar.isPending}
-                    data-testid="button-save-email"
-                  >
-                    {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    儲存郵件設定
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Manual Session Management */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    場次管理
-                  </CardTitle>
-                  <CardDescription>新增直播場次讓觀眾在報名時自行選擇</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Input
-                      type="datetime-local"
-                      value={newSessionDate}
-                      onChange={(e) => setNewSessionDate(e.target.value)}
-                      data-testid="input-new-session-date"
-                    />
-                    <Button
-                      onClick={async () => {
-                        if (!newSessionDate) return;
-                        try {
-                          await apiRequest("POST", `/api/webinars/${id}/sessions`, {
-                            scheduledStart: new Date(newSessionDate).toISOString(),
-                          });
-                          queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
-                          setNewSessionDate("");
-                          toast({ title: "場次已新增" });
-                        } catch (err: any) {
-                          toast({ title: "新增失敗", description: err.message, variant: "destructive" });
-                        }
-                      }}
-                      disabled={!newSessionDate}
-                      data-testid="button-add-session"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      新增場次
-                    </Button>
-                  </div>
-
-                  {webinarSessions && webinarSessions.length > 0 ? (
-                    <div className="space-y-2">
-                      {webinarSessions.map((session) => (
-                        <div key={session.id} className="flex items-center justify-between gap-2 p-3 bg-muted rounded-md">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">
-                              {new Date(session.scheduledStart).toLocaleString("zh-TW", {
-                                year: "numeric", month: "2-digit", day: "2-digit",
-                                hour: "2-digit", minute: "2-digit",
-                              })}
-                            </span>
-                            <Badge variant={
-                              new Date(session.scheduledStart) > new Date() ? "default" : "secondary"
-                            }>
-                              {new Date(session.scheduledStart) > new Date() ? "即將到來" : "已過期"}
-                            </Badge>
-                          </div>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={async () => {
-                              try {
-                                await apiRequest("DELETE", `/api/webinars/${id}/sessions/${session.id}`);
-                                queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
-                                toast({ title: "場次已刪除" });
-                              } catch (err: any) {
-                                toast({ title: "刪除失敗", description: err.message, variant: "destructive" });
-                              }
-                            }}
-                            data-testid={`button-delete-session-${session.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-2">尚未新增場次，觀眾將無法選擇時段</p>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Recurring Schedule */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    循環排程
-                  </CardTitle>
-                  <CardDescription>自動產生定期直播場次</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>啟用循環排程</Label>
-                    <Switch
-                      checked={recurringEnabled}
-                      onCheckedChange={setRecurringEnabled}
-                      data-testid="switch-recurring-enabled"
-                    />
-                  </div>
-                  {recurringEnabled && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>每週播放日</Label>
-                        <div className="flex flex-wrap gap-2">
-                          {["日", "一", "二", "三", "四", "五", "六"].map((day, i) => (
-                            <Button
-                              key={i}
-                              size="sm"
-                              variant={recurringDays.includes(i) ? "default" : "outline"}
-                              onClick={() => {
-                                setRecurringDays(prev =>
-                                  prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i].sort()
-                                );
-                              }}
-                              data-testid={`button-recurring-day-${i}`}
-                            >
-                              {day}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>播放時間（多個時間用逗號分隔）</Label>
-                        <Input
-                          value={recurringTimes}
-                          onChange={(e) => setRecurringTimes(e.target.value)}
-                          placeholder="09:00, 14:00, 19:00"
-                          data-testid="input-recurring-times"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>排除日期（用逗號分隔）</Label>
-                        <Input
-                          value={recurringExcludeDates}
-                          onChange={(e) => setRecurringExcludeDates(e.target.value)}
-                          placeholder="2026-01-01, 2026-02-14"
-                          data-testid="input-recurring-exclude"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Button
-                          onClick={() => {
-                            updateWebinar.mutate({
-                              recurringSchedule: {
-                                enabled: recurringEnabled,
-                                days: recurringDays,
-                                times: recurringTimes.split(",").map(t => t.trim()).filter(Boolean),
-                                excludeDates: recurringExcludeDates.split(",").map(d => d.trim()).filter(Boolean),
-                              },
-                            });
-                          }}
-                          disabled={updateWebinar.isPending}
-                          data-testid="button-save-recurring"
-                        >
-                          {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          儲存循環排程
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            apiRequest("POST", `/api/webinars/${id}/generate-sessions`, { days: 30 })
-                              .then(() => {
-                                toast({ title: "已產生未來 30 天的場次" });
-                              })
-                              .catch((err: any) => {
-                                toast({ title: "產生場次失敗", description: err.message, variant: "destructive" });
-                              });
-                          }}
-                          data-testid="button-generate-sessions"
-                        >
-                          <RefreshCw className="h-4 w-4 mr-1" />
-                          產生未來 30 天場次
-                        </Button>
-                      </div>
-                    </>
-                  )}
                 </CardContent>
               </Card>
             </div>

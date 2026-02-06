@@ -59,9 +59,16 @@ export default function Registration() {
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegistrationForm) => {
+      const urlParams = new URLSearchParams(window.location.search);
       const payload: any = {
         ...data,
         webinarId: id,
+        utmSource: urlParams.get("utm_source") || undefined,
+        utmMedium: urlParams.get("utm_medium") || undefined,
+        utmCampaign: urlParams.get("utm_campaign") || undefined,
+        utmTerm: urlParams.get("utm_term") || undefined,
+        utmContent: urlParams.get("utm_content") || undefined,
+        landingUrl: window.location.href,
       };
       if (selectedSession) {
         payload.selectedSession = selectedSession;

@@ -25,10 +25,18 @@
 
 ### 後台功能（管理員）
 - **帳號**：admin / aa3210
-- **直播間管理**：建立多個直播、設定 Vimeo 連結、開始時間
-- **假人設定**：建立虛擬觀眾角色、預排時間點訊息
-- **CTA 按鈕設定**：設定按鈕文字、連結、顯示時間
-- **投票設定**：預排投票問題
+- **直播間管理**：建立多個直播、設定 Vimeo 連結、開始時間、刪除直播
+- **7 大分頁管理介面**（eWebinar 風格）：
+  - 排程 (Schedule)：排程模式、時區、重播、場次管理、循環排程
+  - 通知 (Notifications)：郵件設定、郵件範本、Webhook 整合
+  - 互動 (Interactions)：CTA 按鈕、投票、小提示卡、Q&A、回饋問卷
+  - 聊天 (Chat)：假人管理、預排訊息
+  - 報名 (Registration)：報名名單、CSV 匯出、UTM 追蹤顯示
+  - 分析 (Analytics)：報名/出席統計、觀看時長分佈、留存曲線
+  - 設定 (Settings)：基本資訊編輯、品牌設定、嵌入代碼、直播連結
+- **UTM 追蹤**：自動擷取 utm_source/medium/campaign/term/content 和來源 URL
+- **Webhook 整合**：支援 registration/attendance/completion 事件通知，HMAC 簽名
+- **CSV 匯出**：匯出報名名單含 UTM 資料
 - **即時控制台**：主辦人用自訂名稱即時發言
 
 ## 技術架構
@@ -67,6 +75,7 @@
 - `webinar_analytics` - 統計分析數據
 - `email_reminders` - 郵件提醒設定
 - `webinar_sessions` - 直播場次管理
+- `webhooks` - Webhook 整合設定（事件類型、目標 URL、密鑰）
 
 ## 頁面路由
 
@@ -149,6 +158,15 @@
 ### 出席追蹤
 - `POST /api/registrations/:id/attend` - 標記出席
 - `POST /api/registrations/:id/leave` - 標記離開
+
+### Webhooks
+- `GET /api/webinars/:id/webhooks` - 取得 Webhook 列表（需認證）
+- `POST /api/webinars/:id/webhooks` - 新增 Webhook（需認證）
+- `PATCH /api/webinars/:id/webhooks/:hookId` - 更新 Webhook（需認證）
+- `DELETE /api/webinars/:id/webhooks/:hookId` - 刪除 Webhook（需認證）
+
+### CSV 匯出
+- `GET /api/webinars/:id/registrations/export` - 匯出報名名單 CSV（需認證）
 
 ## WebSocket 訊息類型
 

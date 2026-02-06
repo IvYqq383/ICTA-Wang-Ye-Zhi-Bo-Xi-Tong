@@ -7,6 +7,7 @@ import fs from "fs";
 import { storage } from "./storage";
 import { sendWebinarRegistrationEmail } from "./gmail";
 import { createEmailRemindersForRegistration, startEmailScheduler } from "./email-scheduler";
+import crypto from "crypto";
 import {
   insertWebinarSchema,
   insertRegistrationSchema,
@@ -20,6 +21,7 @@ import {
   insertFeedbackResponseSchema,
   insertViewerProgressSchema,
   insertWebinarSessionSchema,
+  insertWebhookSchema,
 } from "@shared/schema";
 
 // Session type extension
@@ -511,6 +513,10 @@ export async function registerRoutes(
       }
       
       const registration = await storage.createRegistration(data);
+      
+      dispatchWebhook(data.webinarId, "registration", {
+        registrationId: registration.id, name: data.name, email: data.email
+      });
       
       const webinar = await storage.getWebinar(data.webinarId);
       if (webinar) {
@@ -1083,6 +1089,75 @@ export async function registerRoutes(
       res.json(registration);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  // ============ Webhooks ============
+  async function dispatchWebhook(webinarId: string, eventType: string, payload: any) {
+    try {
+      const hooks = await storage.getWebhooksByEvent(webinarId, eventType);
+      for (const hook of hooks) {
+        const body = JSON.stringify({ event: eventType, data: payload, timestamp: new Date().toISOString() });
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (hook.secret) {
+          const signature = crypto.createHmac("sha256", hook.secret).update(body).digest("hex");
+          headers["X-Webhook-Signature"] = signature;
+        }
+        fetch(hook.targetUrl, { method: "POST", headers, body }).catch(err => {
+          console.error(`Webhook delivery failed for ${hook.targetUrl}:`, err.message);
+        });
+      }
+    } catch (err) {
+      console.error("Webhook dispatch error:", err);
+    }
+  }
+
+  app.get("/api/webinars/:id/webhooks", requireAdmin, async (req, res) => {
+    const hooks = await storage.getWebhooksByWebinar(req.params.id as string);
+    res.json(hooks);
+  });
+
+  app.post("/api/webinars/:id/webhooks", requireAdmin, async (req, res) => {
+    try {
+      const data = insertWebhookSchema.parse({ ...req.body, webinarId: req.params.id });
+      const hook = await storage.createWebhook(data);
+      res.json(hook);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/webinars/:id/webhooks/:hookId", requireAdmin, async (req, res) => {
+    try {
+      const hook = await storage.updateWebhook(req.params.hookId as string, req.body);
+      res.json(hook);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/webinars/:id/webhooks/:hookId", requireAdmin, async (req, res) => {
+    await storage.deleteWebhook(req.params.hookId as string);
+    res.json({ success: true });
+  });
+
+  // ============ CSV Export ============
+  app.get("/api/webinars/:id/registrations/export", requireAdmin, async (req, res) => {
+    try {
+      const regs = await storage.getRegistrationsByWebinar(req.params.id as string);
+      const headers = ["Name", "Email", "Registered At", "Attended", "Attended At", "Left At", "Watch Duration (s)", "UTM Source", "UTM Medium", "UTM Campaign", "UTM Term", "UTM Content", "Landing URL"];
+      const rows = regs.map((r: any) => [
+        r.name, r.email, r.registeredAt || "", r.attended ? "Yes" : "No",
+        r.attendedAt || "", r.leftAt || "", r.watchDuration || "",
+        r.utmSource || "", r.utmMedium || "", r.utmCampaign || "",
+        r.utmTerm || "", r.utmContent || "", r.landingUrl || ""
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+      const csv = [headers.join(","), ...rows].join("\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename=registrations-${req.params.id}.csv`);
+      res.send("\uFEFF" + csv);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 

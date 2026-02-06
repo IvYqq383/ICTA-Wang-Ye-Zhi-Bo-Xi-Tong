@@ -544,8 +544,8 @@ export default function WebinarRoom() {
         </div>
       )}
       <div className={`flex flex-col lg:flex-row ${brandSettings?.logo ? "h-[calc(100vh-2.5rem)]" : "h-screen"}`}>
-        <div className="flex-1 relative bg-black">
-          <div className="relative w-full h-full min-h-[300px] lg:min-h-0">
+        <div className="flex-1 relative bg-black min-h-0">
+          <div className="relative w-full h-full min-h-[200px] sm:min-h-[300px] lg:min-h-0">
             <iframe
               ref={iframeRef}
               src={`https://player.vimeo.com/video/${extractVimeoId(webinar.vimeoUrl)}?autoplay=${autoplayParam}&title=0&byline=0&portrait=0`}
@@ -556,7 +556,7 @@ export default function WebinarRoom() {
             />
             
             {visibleCtas.length > 0 && (
-              <div className="absolute bottom-4 left-4 right-4 flex flex-col gap-2 z-10">
+              <div className="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 right-2 sm:right-4 flex flex-col gap-1.5 sm:gap-2 z-10">
                 {visibleCtas.map((cta) => (
                   <Button
                     key={cta.id}
@@ -580,7 +580,7 @@ export default function WebinarRoom() {
             </div>
             
             {visibleTip && (
-              <div className="absolute top-4 right-4 z-20 max-w-xs animate-in slide-in-from-right duration-300" data-testid="tip-card">
+              <div className="absolute top-4 right-2 sm:right-4 z-20 max-w-[200px] sm:max-w-xs animate-in slide-in-from-right duration-300" data-testid="tip-card">
                 <Card className="bg-white/95 dark:bg-card/95 backdrop-blur shadow-lg">
                   <CardContent className="p-3">
                     <div className="flex items-start gap-2">
@@ -620,7 +620,7 @@ export default function WebinarRoom() {
           </div>
         </div>
 
-        <div className="w-full lg:w-96 flex flex-col border-l bg-card h-[50vh] lg:h-full">
+        <div className="w-full lg:w-96 flex flex-col border-l bg-card h-[45vh] sm:h-[50vh] lg:h-full">
           <Tabs value={activePanel} onValueChange={setActivePanel} className="flex flex-col h-full">
             <TabsList className="w-full rounded-none border-b h-auto p-0">
               <TabsTrigger value="chat" className="flex-1 rounded-none py-3 data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary" data-testid="tab-chat">

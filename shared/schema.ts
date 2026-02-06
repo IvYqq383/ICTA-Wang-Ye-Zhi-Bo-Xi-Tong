@@ -92,7 +92,13 @@ export const registrations = pgTable("registrations", {
   viewerTimezone: text("viewer_timezone"),
   
   // 來源追蹤
-  source: text("source"), // utm_source 等
+  source: text("source"),
+  utmSource: text("utm_source"),
+  utmMedium: text("utm_medium"),
+  utmCampaign: text("utm_campaign"),
+  utmTerm: text("utm_term"),
+  utmContent: text("utm_content"),
+  landingUrl: text("landing_url"),
   
   // 選擇的場次（用於循環排程）
   selectedSession: timestamp("selected_session"),
@@ -376,3 +382,18 @@ export const webinarSessions = pgTable("webinar_sessions", {
 export const insertWebinarSessionSchema = createInsertSchema(webinarSessions).omit({ id: true });
 export type InsertWebinarSession = z.infer<typeof insertWebinarSessionSchema>;
 export type WebinarSession = typeof webinarSessions.$inferSelect;
+
+// Webhooks (Webhook 整合)
+export const webhooks = pgTable("webhooks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
+  eventType: text("event_type").notNull(), // registration, completion, attendance
+  targetUrl: text("target_url").notNull(),
+  secret: text("secret"),
+  enabled: boolean("enabled").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertWebhookSchema = createInsertSchema(webhooks).omit({ id: true, createdAt: true });
+export type InsertWebhook = z.infer<typeof insertWebhookSchema>;
+export type Webhook = typeof webhooks.$inferSelect;
