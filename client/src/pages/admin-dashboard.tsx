@@ -97,14 +97,18 @@ export default function AdminDashboard() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "live":
-        return <Badge className="bg-red-500">直播中</Badge>;
-      case "ended":
-        return <Badge variant="secondary">已結束</Badge>;
-      default:
-        return <Badge variant="outline">未開始</Badge>;
+  const getStatusBadge = (webinar: Webinar) => {
+    const now = new Date();
+    const start = new Date(webinar.startTime);
+    const duration = webinar.videoDuration || 3600;
+    const end = new Date(start.getTime() + duration * 1000);
+
+    if (now >= start && now <= end) {
+      return <Badge className="bg-red-500">直播中</Badge>;
+    } else if (now > end) {
+      return <Badge variant="secondary">已結束</Badge>;
+    } else {
+      return <Badge variant="outline">即將開始</Badge>;
     }
   };
 
@@ -252,7 +256,7 @@ export default function AdminDashboard() {
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
                     <CardTitle className="text-lg line-clamp-2">{webinar.title}</CardTitle>
-                    {getStatusBadge(webinar.status)}
+                    {getStatusBadge(webinar)}
                   </div>
                   {webinar.description && (
                     <CardDescription className="line-clamp-2">{webinar.description}</CardDescription>
