@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -20,7 +20,8 @@ import {
   ArrowLeft, Plus, Users, MessageSquare, MousePointerClick, 
   BarChart, Trash2, Loader2, Clock, Radio, Copy, ExternalLink,
   Lightbulb, HelpCircle, Star, TrendingUp, Settings, Code,
-  Mail, Palette, Calendar, Edit, Save, RefreshCw, FileText, Eye
+  Mail, Palette, Calendar, Edit, Save, RefreshCw, FileText, Eye,
+  Upload, ImagePlus, X
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -112,6 +113,8 @@ export default function AdminWebinarDetail() {
   const [editVimeoUrl, setEditVimeoUrl] = useState("");
   const [editStartTime, setEditStartTime] = useState("");
   const [editCoverImage, setEditCoverImage] = useState("");
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const coverFileRef = useRef<HTMLInputElement>(null);
 
   // Brand settings state
   const [brandLogo, setBrandLogo] = useState("");
@@ -468,22 +471,109 @@ export default function AdminWebinarDetail() {
                   rows={2}
                   data-testid="input-edit-description"
                 />
-                <Input
-                  value={editCoverImage}
-                  onChange={(e) => setEditCoverImage(e.target.value)}
-                  placeholder="封面圖片網址（選填）"
-                  data-testid="input-edit-cover"
-                />
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">封面圖片</Label>
+                  {editCoverImage ? (
+                    <div className="relative rounded-md overflow-hidden border">
+                      <img src={editCoverImage} alt="封面預覽" className="w-full h-32 object-cover" />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm"
+                        onClick={() => setEditCoverImage("")}
+                        data-testid="button-remove-cover"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div
+                      className="border-2 border-dashed rounded-md p-4 flex flex-col items-center justify-center gap-2 cursor-pointer hover-elevate"
+                      onClick={() => coverFileRef.current?.click()}
+                      data-testid="button-upload-cover-area"
+                    >
+                      <ImagePlus className="h-6 w-6 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">點擊上傳封面圖片</span>
+                    </div>
+                  )}
+                  <input
+                    ref={coverFileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingCover(true);
+                      try {
+                        const formData = new FormData();
+                        formData.append("file", file);
+                        const res = await fetch("/api/upload", {
+                          method: "POST",
+                          body: formData,
+                        });
+                        if (!res.ok) {
+                          const errData = await res.json();
+                          throw new Error(errData.message || "上傳失敗");
+                        }
+                        const { url } = await res.json();
+                        setEditCoverImage(url);
+                        toast({ title: "封面上傳成功" });
+                      } catch (err: any) {
+                        toast({ title: "上傳失敗", description: err.message, variant: "destructive" });
+                      } finally {
+                        setUploadingCover(false);
+                        if (coverFileRef.current) coverFileRef.current.value = "";
+                      }
+                    }}
+                    data-testid="input-upload-cover-file"
+                  />
+                  {uploadingCover && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      上傳中...
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={editCoverImage}
+                      onChange={(e) => setEditCoverImage(e.target.value)}
+                      placeholder="或輸入圖片網址"
+                      className="flex-1 text-xs"
+                      data-testid="input-edit-cover"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => coverFileRef.current?.click()}
+                      disabled={uploadingCover}
+                      data-testid="button-upload-cover"
+                    >
+                      <Upload className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    onClick={() => {
+                    onClick={async () => {
+                      const oldCover = webinar.coverImage;
+                      const newCover = editCoverImage || null;
+                      if (oldCover && oldCover.startsWith("/uploads/") && oldCover !== newCover) {
+                        try {
+                          await fetch("/api/upload", {
+                            method: "DELETE",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ url: oldCover }),
+                          });
+                        } catch {}
+                      }
                       updateWebinar.mutate({
                         title: editTitle,
                         description: editDescription || null,
                         vimeoUrl: editVimeoUrl,
                         startTime: new Date(editStartTime).toISOString(),
-                        coverImage: editCoverImage || null,
+                        coverImage: newCover,
                       });
                     }}
                     disabled={updateWebinar.isPending || !editTitle || !editVimeoUrl}
@@ -498,7 +588,15 @@ export default function AdminWebinarDetail() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
+                {webinar.coverImage && (
+                  <img
+                    src={webinar.coverImage}
+                    alt={webinar.title}
+                    className="w-16 h-10 object-cover rounded-md flex-shrink-0 border"
+                    data-testid="img-cover-preview"
+                  />
+                )}
                 <div>
                   <h1 className="text-lg font-bold">{webinar.title}</h1>
                   <p className="text-sm text-muted-foreground">直播間設定</p>

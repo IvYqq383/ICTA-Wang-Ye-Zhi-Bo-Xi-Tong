@@ -1,6 +1,9 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { storage } from "./storage";
 import { sendWebinarRegistrationEmail } from "./gmail";
 import { createEmailRemindersForRegistration, startEmailScheduler } from "./email-scheduler";
@@ -70,6 +73,62 @@ export async function registerRoutes(
     }
     next();
   });
+
+  // ============ Image Upload ============
+  const uploadsDir = path.join(process.cwd(), "client", "public", "uploads");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  const uploadStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadsDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || ".png";
+      const name = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}${ext}`;
+      cb(null, name);
+    },
+  });
+
+  const upload = multer({
+    storage: uploadStorage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+      if (allowed.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error("只允許上傳圖片格式 (jpg, png, gif, webp)"));
+      }
+    },
+  });
+
+  app.post("/api/upload", requireAdmin, upload.single("file"), (req: Request, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "未選擇檔案" });
+    }
+    const url = `/uploads/${req.file.filename}`;
+    res.json({ url, filename: req.file.filename });
+  });
+
+  app.delete("/api/upload", requireAdmin, (req: Request, res: Response) => {
+    const { url } = req.body;
+    if (url && url.startsWith("/uploads/")) {
+      const filename = url.replace("/uploads/", "");
+      if (filename && !filename.includes("/") && !filename.includes("..")) {
+        const filePath = path.join(uploadsDir, filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+    }
+    res.json({ success: true });
+  });
+
+  const serveStatic = (await import("express")).default.static;
+  app.use("/uploads", serveStatic(uploadsDir, {
+    maxAge: "1d",
+    immutable: true,
+  }));
 
   // WebSocket Server
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });

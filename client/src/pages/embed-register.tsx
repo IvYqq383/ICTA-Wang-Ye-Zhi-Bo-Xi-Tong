@@ -184,6 +184,15 @@ export default function EmbedRegister() {
         </div>
       )}
 
+      {webinar.coverImage && (webinar.coverImage.startsWith("http://") || webinar.coverImage.startsWith("https://") || webinar.coverImage.startsWith("/")) && (
+        <img
+          src={webinar.coverImage}
+          alt={webinar.title}
+          className="w-full h-36 object-cover rounded-md mb-3"
+          data-testid="img-embed-cover"
+        />
+      )}
+
       <h3 className="text-lg font-bold text-center mb-1" data-testid="text-embed-title">{webinar.title}</h3>
       {webinar.description && (
         <p className="text-xs text-muted-foreground text-center mb-3">{webinar.description}</p>
