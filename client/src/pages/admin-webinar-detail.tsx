@@ -1040,15 +1040,24 @@ export default function AdminWebinarDetail() {
                           </Button>
                           <Button
                             variant="outline"
-                            onClick={() => {
-                              apiRequest("POST", `/api/webinars/${id}/generate-sessions`, { days: 30 })
-                                .then(() => {
-                                  queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
-                                  toast({ title: "已產生未來 30 天的場次" });
-                                })
-                                .catch((err: any) => {
-                                  toast({ title: "產生場次失敗", description: err.message, variant: "destructive" });
+                            onClick={async () => {
+                              try {
+                                await apiRequest("PATCH", `/api/webinars/${id}`, {
+                                  recurringSchedule: {
+                                    enabled: true,
+                                    frequency: scheduleFrequency,
+                                    days: recurringDays,
+                                    times: scheduledTimeSlots,
+                                    excludeDates: recurringExcludeDates.split(",").map(d => d.trim()).filter(Boolean),
+                                  },
                                 });
+                                await apiRequest("POST", `/api/webinars/${id}/generate-sessions`, { days: 30 });
+                                queryClient.invalidateQueries({ queryKey: ["/api/webinars", id] });
+                                queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
+                                toast({ title: "已產生未來 30 天的場次" });
+                              } catch (err: any) {
+                                toast({ title: "產生場次失敗", description: err.message, variant: "destructive" });
+                              }
                             }}
                             data-testid="button-generate-sessions"
                           >
