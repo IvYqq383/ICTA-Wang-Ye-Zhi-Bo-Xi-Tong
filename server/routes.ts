@@ -50,6 +50,26 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Allow iframe embedding for embed routes
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/embed/') || req.path === '/livecast-widget.js') {
+      res.removeHeader('X-Frame-Options');
+      res.setHeader('Content-Security-Policy', "frame-ancestors *");
+    }
+    // CORS only for public-facing API routes used by embeds
+    const publicCorsRoutes = ['/api/webinars', '/api/registrations'];
+    const isPublicRoute = publicCorsRoutes.some(r => req.path.startsWith(r));
+    if (isPublicRoute) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+      }
+    }
+    next();
+  });
+
   // WebSocket Server
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 

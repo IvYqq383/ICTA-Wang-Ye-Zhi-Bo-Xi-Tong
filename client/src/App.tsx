@@ -10,10 +10,16 @@ import AdminLogin from "@/pages/admin-login";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AdminWebinarDetail from "@/pages/admin-webinar-detail";
 import AdminControl from "@/pages/admin-control";
+import EmbedRegister from "@/pages/embed-register";
+import EmbedWebinar from "@/pages/embed-webinar";
 
 function Router() {
   return (
     <Switch>
+      {/* Embed Routes (minimal UI for iframe) */}
+      <Route path="/embed/register/:id" component={EmbedRegister} />
+      <Route path="/embed/webinar/:id" component={EmbedWebinar} />
+      
       {/* Public Routes */}
       <Route path="/register/:id" component={Registration} />
       <Route path="/webinar/:id" component={WebinarRoom} />

@@ -19,7 +19,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   ArrowLeft, Plus, Users, MessageSquare, MousePointerClick, 
   BarChart, Trash2, Loader2, Clock, Radio, Copy, ExternalLink,
-  Lightbulb, HelpCircle, Star, TrendingUp, Settings
+  Lightbulb, HelpCircle, Star, TrendingUp, Settings, Code
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -426,6 +426,10 @@ export default function AdminWebinarDetail() {
             <TabsTrigger value="analytics">
               <TrendingUp className="h-4 w-4 mr-1" />
               分析
+            </TabsTrigger>
+            <TabsTrigger value="embed" data-testid="tab-embed">
+              <Code className="h-4 w-4 mr-1" />
+              嵌入
             </TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings">
               <Settings className="h-4 w-4 mr-1" />
@@ -1340,6 +1344,133 @@ export default function AdminWebinarDetail() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* Embed Tab */}
+          <TabsContent value="embed">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">嵌入報名表單</CardTitle>
+                  <CardDescription>將報名表單嵌入到其他網站，訪客可以直接在你的網站上報名</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="relative">
+                    <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all" data-testid="text-embed-register-code">{`<iframe src="${window.location.origin}/embed/register/${id}" width="100%" height="500" frameborder="0" style="border:none;border-radius:12px;max-width:460px;"></iframe>`}</pre>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute top-2 right-2"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`<iframe src="${window.location.origin}/embed/register/${id}" width="100%" height="500" frameborder="0" style="border:none;border-radius:12px;max-width:460px;"></iframe>`);
+                        toast({ title: "已複製嵌入代碼" });
+                      }}
+                      data-testid="button-copy-embed-register"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="bg-muted/50 p-3 rounded-md">
+                    <p className="text-xs text-muted-foreground">預覽效果：</p>
+                    <div className="mt-2 border rounded-md overflow-hidden" style={{ maxWidth: 460 }}>
+                      <iframe
+                        src={`/embed/register/${id}`}
+                        width="100%"
+                        height="400"
+                        style={{ border: "none" }}
+                        title="報名表單預覽"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">嵌入直播間播放器</CardTitle>
+                  <CardDescription>將直播間嵌入到其他網站，觀眾可直接在你的網站上觀看直播</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="relative">
+                    <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all" data-testid="text-embed-webinar-code">{`<iframe src="${window.location.origin}/embed/webinar/${id}" width="100%" height="700" frameborder="0" style="border:none;border-radius:12px;" allow="autoplay; fullscreen"></iframe>`}</pre>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute top-2 right-2"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`<iframe src="${window.location.origin}/embed/webinar/${id}" width="100%" height="700" frameborder="0" style="border:none;border-radius:12px;" allow="autoplay; fullscreen"></iframe>`);
+                        toast({ title: "已複製嵌入代碼" });
+                      }}
+                      data-testid="button-copy-embed-webinar"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">彈出式報名按鈕</CardTitle>
+                  <CardDescription>在其他網站加入一段 JavaScript，訪客點擊按鈕後彈出報名視窗</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium mb-2">步驟 1：加入 Script 標籤（放在 &lt;/body&gt; 前）</p>
+                    <div className="relative">
+                      <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all" data-testid="text-embed-script-code">{`<script src="${window.location.origin}/livecast-widget.js"></script>`}</pre>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`<script src="${window.location.origin}/livecast-widget.js"></script>`);
+                          toast({ title: "已複製 Script 代碼" });
+                        }}
+                        data-testid="button-copy-embed-script"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium mb-2">步驟 2：在按鈕上加入屬性</p>
+                    <div className="relative">
+                      <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all" data-testid="text-embed-button-code">{`<button data-livecast-register="${id}">立即報名</button>`}</pre>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`<button data-livecast-register="${id}">立即報名</button>`);
+                          toast({ title: "已複製按鈕代碼" });
+                        }}
+                        data-testid="button-copy-embed-button"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium mb-2">或用 JavaScript 直接呼叫</p>
+                    <div className="relative">
+                      <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all">{`LiveCast.openRegister("${id}");`}</pre>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`LiveCast.openRegister("${id}");`);
+                          toast({ title: "已複製" });
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Settings Tab */}

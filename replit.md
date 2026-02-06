@@ -78,6 +78,8 @@
 | `/admin/webinar/:id/control` | 即時控制台 |
 | `/register/:id` | 觀眾報名頁 |
 | `/webinar/:id` | 直播間觀看頁 |
+| `/embed/register/:id` | 嵌入式報名表單（iframe 用） |
+| `/embed/webinar/:id` | 嵌入式直播間播放器（iframe 用） |
 
 ## API 端點
 
