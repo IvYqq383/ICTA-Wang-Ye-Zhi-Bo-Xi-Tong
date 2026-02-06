@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import type { Webinar, FakeUser, ScheduledMessage, CtaButton, Poll, Registration, Tip, Question, FeedbackSurvey } from "@shared/schema";
 
 // Analytics Response Type
@@ -1193,54 +1194,152 @@ export default function AdminWebinarDetail() {
 
           {/* Analytics Tab */}
           <TabsContent value="analytics">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">數據分析</CardTitle>
-                <CardDescription>查看直播的統計數據</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {analytics ? (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="p-4 bg-muted rounded-md text-center">
-                        <p className="text-2xl font-bold">{analytics.summary?.totalRegistrations || 0}</p>
-                        <p className="text-xs text-muted-foreground">報名人數</p>
-                      </div>
-                      <div className="p-4 bg-muted rounded-md text-center">
-                        <p className="text-2xl font-bold">{analytics.summary?.attended || 0}</p>
-                        <p className="text-xs text-muted-foreground">參加人數</p>
-                      </div>
-                      <div className="p-4 bg-muted rounded-md text-center">
-                        <p className="text-2xl font-bold">{analytics.summary?.attendanceRate?.toFixed(1) || 0}%</p>
-                        <p className="text-xs text-muted-foreground">出席率</p>
-                      </div>
-                      <div className="p-4 bg-muted rounded-md text-center">
-                        <p className="text-2xl font-bold">{formatTime(analytics.summary?.avgWatchTime || 0)}</p>
-                        <p className="text-xs text-muted-foreground">平均觀看時間</p>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-medium mb-2">觀眾出席詳情</h4>
-                      <ScrollArea className="h-[200px]">
-                        <div className="space-y-2">
-                          {analytics.registrations?.filter((r) => r.attended).map((reg) => (
-                            <div key={reg.id} className="flex items-center justify-between p-2 bg-muted rounded-md text-sm">
-                              <span>{reg.name}</span>
-                              <span className="text-muted-foreground">
-                                觀看 {formatTime(reg.watchDuration || 0)}
-                              </span>
+            {analytics ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className="text-2xl font-bold" data-testid="text-total-registrations">{analytics.summary?.totalRegistrations || 0}</p>
+                      <p className="text-xs text-muted-foreground">報名人數</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className="text-2xl font-bold" data-testid="text-attended">{analytics.summary?.attended || 0}</p>
+                      <p className="text-xs text-muted-foreground">參加人數</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className="text-2xl font-bold" data-testid="text-attendance-rate">{analytics.summary?.attendanceRate?.toFixed(1) || 0}%</p>
+                      <p className="text-xs text-muted-foreground">出席率</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className="text-2xl font-bold" data-testid="text-avg-watch-time">{formatTime(analytics.summary?.avgWatchTime || 0)}</p>
+                      <p className="text-xs text-muted-foreground">平均觀看時間</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">報名 vs 出席</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {(() => {
+                        const pieData = [
+                          { name: "已出席", value: analytics.summary?.attended || 0 },
+                          { name: "未出席", value: (analytics.summary?.totalRegistrations || 0) - (analytics.summary?.attended || 0) },
+                        ].filter(d => d.value > 0);
+                        const COLORS = ["hsl(var(--primary))", "hsl(var(--muted-foreground) / 0.3)"];
+                        return pieData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={200}>
+                            <PieChart>
+                              <Pie
+                                data={pieData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={50}
+                                outerRadius={80}
+                                dataKey="value"
+                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                              >
+                                {pieData.map((_, index) => (
+                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <p className="text-center text-muted-foreground py-8">尚無數據</p>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">觀看時長分佈</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {(() => {
+                        const attendedRegs = analytics.registrations?.filter(r => r.attended && r.watchDuration) || [];
+                        if (attendedRegs.length === 0) return <p className="text-center text-muted-foreground py-8">尚無數據</p>;
+                        const videoDuration = analytics.summary?.videoDuration || 3600;
+                        const buckets = [
+                          { name: "0-25%", count: 0 },
+                          { name: "25-50%", count: 0 },
+                          { name: "50-75%", count: 0 },
+                          { name: "75-100%", count: 0 },
+                        ];
+                        attendedRegs.forEach(r => {
+                          const pct = ((r.watchDuration || 0) / videoDuration) * 100;
+                          if (pct < 25) buckets[0].count++;
+                          else if (pct < 50) buckets[1].count++;
+                          else if (pct < 75) buckets[2].count++;
+                          else buckets[3].count++;
+                        });
+                        return (
+                          <ResponsiveContainer width="100%" height={200}>
+                            <RechartsBarChart data={buckets}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                              <XAxis dataKey="name" fontSize={12} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                              <YAxis fontSize={12} tick={{ fill: "hsl(var(--muted-foreground))" }} allowDecimals={false} />
+                              <Tooltip />
+                              <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="觀眾數" />
+                            </RechartsBarChart>
+                          </ResponsiveContainer>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">觀眾出席詳情</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[250px]">
+                      <div className="space-y-2">
+                        {analytics.registrations?.filter((r) => r.attended).length === 0 && (
+                          <p className="text-center text-muted-foreground py-4">尚無出席記錄</p>
+                        )}
+                        {analytics.registrations?.filter((r) => r.attended).map((reg) => {
+                          const pct = analytics.summary?.videoDuration ? Math.min(100, Math.round(((reg.watchDuration || 0) / analytics.summary.videoDuration) * 100)) : 0;
+                          return (
+                            <div key={reg.id} className="flex items-center justify-between gap-2 p-3 bg-muted rounded-md text-sm">
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium">{reg.name}</span>
+                                <span className="text-muted-foreground ml-2">{reg.email}</span>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <div className="w-20 bg-background rounded-full h-2">
+                                  <div className="bg-primary h-2 rounded-full" style={{ width: `${pct}%` }} />
+                                </div>
+                                <span className="text-muted-foreground w-16 text-right">
+                                  {formatTime(reg.watchDuration || 0)}
+                                </span>
+                              </div>
                             </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">尚無分析數據</p>
-                )}
-              </CardContent>
-            </Card>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-8">
+                  <p className="text-center text-muted-foreground">尚無分析數據</p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Settings Tab */}
