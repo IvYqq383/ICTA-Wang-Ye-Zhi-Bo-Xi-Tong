@@ -3,6 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 import Registration from "@/pages/registration";
 import WebinarRoom from "@/pages/webinar-room";
@@ -30,13 +31,8 @@ function Router() {
       <Route path="/admin/webinar/:id" component={AdminWebinarDetail} />
       <Route path="/admin/webinar/:id/control" component={AdminControl} />
       
-      {/* Home redirects to admin */}
-      <Route path="/">
-        {() => {
-          window.location.href = "/admin";
-          return null;
-        }}
-      </Route>
+      {/* Landing Page */}
+      <Route path="/" component={Landing} />
       
       {/* Fallback to 404 */}
       <Route component={NotFound} />
