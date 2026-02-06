@@ -8,8 +8,10 @@
 - Widget JS 同時支援 `window.ICTA_WEBINAR` 和 `window.LiveCast`（向下相容）
 
 ## 多語系 (i18n)
-- 首頁支援三種語言：繁體中文 (zh-TW)、簡體中文 (zh-CN)、英文 (en)
+- 共用 hook：`client/src/hooks/use-lang.ts`（useLang / useAdminLang）
 - 語言選擇存儲於 localStorage（key: `icta-lang`），預設為繁體中文
+- **首頁 + 登入頁**：支援三種語言（zh-TW、zh-CN、en），使用下拉選單切換
+- **後台頁面**（Dashboard、Webinar Detail、Control）：支援兩種語言（zh-TW、zh-CN），使用切換按鈕
 - 所有首頁文字、SEO meta tags、OG tags 會隨語言切換更新
 - 語言切換器位於導航列右側（Languages 圖標按鈕）
 

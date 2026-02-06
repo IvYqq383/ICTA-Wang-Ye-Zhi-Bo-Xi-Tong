@@ -8,8 +8,9 @@ import {
   Shield, ArrowRight, CheckCircle2, MousePointerClick, Bot,
   Globe, ChevronRight, Layers, Languages
 } from "lucide-react";
+import { useLang, type LangFull } from "@/hooks/use-lang";
 
-type Lang = "zh-TW" | "zh-CN" | "en";
+type Lang = LangFull;
 
 const langLabels: Record<Lang, string> = {
   "zh-TW": "繁體中文",
@@ -376,11 +377,7 @@ function getStats(lang: Lang) {
 
 export default function Landing() {
   const [, setLocation] = useLocation();
-  const [lang, setLang] = useState<Lang>(() => {
-    const saved = localStorage.getItem("icta-lang");
-    if (saved === "zh-TW" || saved === "zh-CN" || saved === "en") return saved;
-    return "zh-TW";
-  });
+  const { lang, setLang } = useLang();
   const [langOpen, setLangOpen] = useState(false);
 
   const s = t[lang];
@@ -391,9 +388,8 @@ export default function Landing() {
 
   const switchLang = useCallback((newLang: Lang) => {
     setLang(newLang);
-    localStorage.setItem("icta-lang", newLang);
     setLangOpen(false);
-  }, []);
+  }, [setLang]);
 
   useEffect(() => {
     document.title = s.seoTitle;

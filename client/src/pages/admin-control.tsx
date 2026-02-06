@@ -7,11 +7,89 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAdminLang, type LangAdmin } from "@/hooks/use-lang";
 import { 
   ArrowLeft, Send, Users, Heart, MessageSquare, 
-  Loader2, Radio, BarChart, User, MessageCircle, Clock
+  Loader2, Radio, BarChart, User, MessageCircle, Clock, Languages
 } from "lucide-react";
 import type { Webinar, ChatMessage, Poll } from "@shared/schema";
+
+const t: Record<LangAdmin, Record<string, string>> = {
+  "zh-TW": {
+    defaultHostName: "主辦人",
+    toastBroadcast: "訊息已廣播給所有觀眾",
+    toastReply: "已回覆此觀眾",
+    toastPollSelected: "投票已發送給選定觀眾",
+    toastPollAll: "投票已發送給所有觀眾",
+    connected: "已連線",
+    connecting: "連線中...",
+    headerSubtitle: "即時控制台 - 獨立觀眾視圖",
+    viewerCount: "人觀看",
+    viewerList: "觀眾列表",
+    allMessages: "所有訊息",
+    noViewers: "尚無觀眾加入",
+    messageCount: "則訊息",
+    viewerFallback: "觀眾",
+    conversation: "的對話",
+    allChat: "所有聊天訊息",
+    badgeHost: "主辦",
+    badgeDummy: "假人",
+    viewConversation: "查看對話",
+    displayName: "顯示名稱",
+    replyPlaceholder: "回覆此觀眾...",
+    broadcastPlaceholder: "廣播給所有觀眾...",
+    replyHintPrefix: "只有 ",
+    replyHintSuffix: " 會看到此回覆",
+    controlPanel: "控制面板",
+    quickPoll: "快速投票",
+    noPollSettings: "尚無投票設定",
+    sendToViewer: "發送給此觀眾",
+    sendToAll: "發送給所有人",
+    liveStatus: "直播狀態",
+    onlineCount: "在線人數",
+    interactiveViewers: "互動觀眾",
+    likeCount: "按讚數",
+    messageTotal: "訊息數",
+    notFound: "找不到此直播間",
+  },
+  "zh-CN": {
+    defaultHostName: "主办人",
+    toastBroadcast: "消息已广播给所有观众",
+    toastReply: "已回复此观众",
+    toastPollSelected: "投票已发送给选定观众",
+    toastPollAll: "投票已发送给所有观众",
+    connected: "已连线",
+    connecting: "连线中...",
+    headerSubtitle: "实时控制台 - 独立观众视图",
+    viewerCount: "人观看",
+    viewerList: "观众列表",
+    allMessages: "所有消息",
+    noViewers: "尚无观众加入",
+    messageCount: "则消息",
+    viewerFallback: "观众",
+    conversation: "的对话",
+    allChat: "所有聊天消息",
+    badgeHost: "主办",
+    badgeDummy: "假人",
+    viewConversation: "查看对话",
+    displayName: "显示名称",
+    replyPlaceholder: "回复此观众...",
+    broadcastPlaceholder: "广播给所有观众...",
+    replyHintPrefix: "只有 ",
+    replyHintSuffix: " 会看到此回复",
+    controlPanel: "控制面板",
+    quickPoll: "快速投票",
+    noPollSettings: "尚无投票设定",
+    sendToViewer: "发送给此观众",
+    sendToAll: "发送给所有人",
+    liveStatus: "直播状态",
+    onlineCount: "在线人数",
+    interactiveViewers: "互动观众",
+    likeCount: "点赞数",
+    messageTotal: "消息数",
+    notFound: "找不到此直播间",
+  },
+};
 
 interface WebSocketMessage {
   type: string;
@@ -29,8 +107,11 @@ export default function AdminControl() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { lang, setLang } = useAdminLang();
+  const s = t[lang];
   
-  const [hostName, setHostName] = useState("主辦人");
+  const [hostName, setHostName] = useState(s.defaultHostName);
+  const [hostNameEdited, setHostNameEdited] = useState(false);
   const [messageInput, setMessageInput] = useState("");
   
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
@@ -40,6 +121,10 @@ export default function AdminControl() {
   const [likeCount, setLikeCount] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   
+  useEffect(() => {
+    if (!hostNameEdited) setHostName(s.defaultHostName);
+  }, [lang, s.defaultHostName, hostNameEdited]);
+
   const wsRef = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -152,7 +237,7 @@ export default function AdminControl() {
     }));
     
     setMessageInput("");
-    toast({ title: "訊息已廣播給所有觀眾" });
+    toast({ title: s.toastBroadcast });
   };
 
   const sendReplyToSession = () => {
@@ -169,7 +254,7 @@ export default function AdminControl() {
     }));
     
     setMessageInput("");
-    toast({ title: "已回覆此觀眾" });
+    toast({ title: s.toastReply });
   };
 
   const triggerPoll = (poll: Poll) => {
@@ -185,7 +270,7 @@ export default function AdminControl() {
     }));
     
     toast({ 
-      title: selectedSession ? "投票已發送給選定觀眾" : "投票已發送給所有觀眾" 
+      title: selectedSession ? s.toastPollSelected : s.toastPollAll 
     });
   };
 
@@ -198,7 +283,7 @@ export default function AdminControl() {
   const formatTime = (date: Date | string | null) => {
     if (!date) return "";
     const d = new Date(date);
-    return d.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" });
   };
 
   if (isLoading) {
@@ -212,7 +297,7 @@ export default function AdminControl() {
   if (!webinar) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p>找不到此直播間</p>
+        <p>{s.notFound}</p>
       </div>
     );
   }
@@ -232,20 +317,29 @@ export default function AdminControl() {
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold">{webinar.title}</h1>
               <Badge variant={isConnected ? "default" : "secondary"}>
-                {isConnected ? "已連線" : "連線中..."}
+                {isConnected ? s.connected : s.connecting}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground">即時控制台 - 獨立觀眾視圖</p>
+            <p className="text-sm text-muted-foreground">{s.headerSubtitle}</p>
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
               <Users className="h-4 w-4" />
-              <span>{viewerCount} 人觀看</span>
+              <span>{viewerCount} {s.viewerCount}</span>
             </div>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
               <Heart className="h-4 w-4" />
               <span>{likeCount}</span>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLang(lang === "zh-TW" ? "zh-CN" : "zh-TW")}
+              data-testid="button-control-lang-toggle"
+            >
+              <Languages className="h-4 w-4 mr-1" />
+              {lang === "zh-TW" ? "繁" : "简"}
+            </Button>
           </div>
         </div>
       </header>
@@ -256,7 +350,7 @@ export default function AdminControl() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Users className="h-4 w-4" />
-                觀眾列表 ({sessionsList.length})
+                {s.viewerList} ({sessionsList.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -269,12 +363,12 @@ export default function AdminControl() {
                     data-testid="button-view-all"
                   >
                     <MessageSquare className="h-4 w-4 mr-2" />
-                    所有訊息 ({allMessages.length})
+                    {s.allMessages} ({allMessages.length})
                   </Button>
                   
                   {sessionsList.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                      尚無觀眾加入
+                      {s.noViewers}
                     </p>
                   ) : (
                     sessionsList.map((session) => (
@@ -291,7 +385,7 @@ export default function AdminControl() {
                             <div className="font-medium truncate">{session.nickname}</div>
                             <div className="text-xs text-muted-foreground flex items-center gap-1">
                               <MessageCircle className="h-3 w-3" />
-                              {session.messages.length} 則訊息
+                              {session.messages.length} {s.messageCount}
                             </div>
                           </div>
                           <div className="text-xs text-muted-foreground flex items-center gap-1">
@@ -312,8 +406,8 @@ export default function AdminControl() {
               <CardTitle className="text-base flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
                 {selectedSession 
-                  ? `${viewerSessions.get(selectedSession)?.nickname || "觀眾"} 的對話`
-                  : "所有聊天訊息"
+                  ? `${viewerSessions.get(selectedSession)?.nickname || s.viewerFallback} ${s.conversation}`
+                  : s.allChat
                 }
               </CardTitle>
             </CardHeader>
@@ -336,10 +430,10 @@ export default function AdminControl() {
                               {msg.senderName}
                             </span>
                             {msg.senderType === "host" && (
-                              <Badge variant="destructive" className="text-xs">主辦</Badge>
+                              <Badge variant="destructive" className="text-xs">{s.badgeHost}</Badge>
                             )}
                             {msg.senderType === "scheduled" && (
-                              <Badge variant="secondary" className="text-xs">假人</Badge>
+                              <Badge variant="secondary" className="text-xs">{s.badgeDummy}</Badge>
                             )}
                             {msg.senderType === "viewer" && chatMsg.sessionId && !selectedSession && (
                               <Badge 
@@ -347,7 +441,7 @@ export default function AdminControl() {
                                 className="text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground"
                                 onClick={() => setSelectedSession(chatMsg.sessionId!)}
                               >
-                                查看對話
+                                {s.viewConversation}
                               </Badge>
                             )}
                             <span className="text-xs text-muted-foreground">
@@ -366,9 +460,9 @@ export default function AdminControl() {
               <div className="space-y-3 border-t pt-3">
                 <div className="flex gap-2">
                   <Input
-                    placeholder="顯示名稱"
+                    placeholder={s.displayName}
                     value={hostName}
-                    onChange={(e) => setHostName(e.target.value)}
+                    onChange={(e) => { setHostName(e.target.value); setHostNameEdited(true); }}
                     className="max-w-[120px]"
                     data-testid="input-host-name"
                   />
@@ -376,7 +470,7 @@ export default function AdminControl() {
 
                 <div className="flex gap-2">
                   <Input
-                    placeholder={selectedSession ? "回覆此觀眾..." : "廣播給所有觀眾..."}
+                    placeholder={selectedSession ? s.replyPlaceholder : s.broadcastPlaceholder}
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -398,7 +492,7 @@ export default function AdminControl() {
                 
                 {selectedSession && (
                   <p className="text-xs text-muted-foreground">
-                    只有 {viewerSessions.get(selectedSession)?.nickname} 會看到此回覆
+                    {s.replyHintPrefix}{viewerSessions.get(selectedSession)?.nickname}{s.replyHintSuffix}
                   </p>
                 )}
               </div>
@@ -409,13 +503,13 @@ export default function AdminControl() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Radio className="h-4 w-4" />
-                控制面板
+                {s.controlPanel}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div>
-                  <h4 className="font-medium mb-2">快速投票</h4>
+                  <h4 className="font-medium mb-2">{s.quickPoll}</h4>
                   {polls && polls.length > 0 ? (
                     <div className="space-y-2">
                       {polls.map((poll) => (
@@ -433,34 +527,34 @@ export default function AdminControl() {
                             data-testid={`button-trigger-poll-${poll.id}`}
                           >
                             <BarChart className="h-4 w-4 mr-1" />
-                            {selectedSession ? "發送給此觀眾" : "發送給所有人"}
+                            {selectedSession ? s.sendToViewer : s.sendToAll}
                           </Button>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">尚無投票設定</p>
+                    <p className="text-sm text-muted-foreground">{s.noPollSettings}</p>
                   )}
                 </div>
 
                 <div className="border-t pt-4">
-                  <h4 className="font-medium mb-2">直播狀態</h4>
+                  <h4 className="font-medium mb-2">{s.liveStatus}</h4>
                   <div className="grid grid-cols-2 gap-2">
                     <Card className="p-3 text-center">
                       <div className="text-xl font-bold">{viewerCount}</div>
-                      <div className="text-xs text-muted-foreground">在線人數</div>
+                      <div className="text-xs text-muted-foreground">{s.onlineCount}</div>
                     </Card>
                     <Card className="p-3 text-center">
                       <div className="text-xl font-bold">{sessionsList.length}</div>
-                      <div className="text-xs text-muted-foreground">互動觀眾</div>
+                      <div className="text-xs text-muted-foreground">{s.interactiveViewers}</div>
                     </Card>
                     <Card className="p-3 text-center">
                       <div className="text-xl font-bold">{likeCount}</div>
-                      <div className="text-xs text-muted-foreground">按讚數</div>
+                      <div className="text-xs text-muted-foreground">{s.likeCount}</div>
                     </Card>
                     <Card className="p-3 text-center">
                       <div className="text-xl font-bold">{allMessages.length}</div>
-                      <div className="text-xs text-muted-foreground">訊息數</div>
+                      <div className="text-xs text-muted-foreground">{s.messageTotal}</div>
                     </Card>
                   </div>
                 </div>
