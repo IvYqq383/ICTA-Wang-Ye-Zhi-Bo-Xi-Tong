@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 import { 
   ArrowLeft, Plus, Users, MessageSquare, MousePointerClick, 
   BarChart, Trash2, Loader2, Clock, Radio, Copy, ExternalLink,
@@ -128,6 +129,17 @@ export default function AdminWebinarDetail() {
   const [recurringExcludeDates, setRecurringExcludeDates] = useState("");
 
   const [newSessionDate, setNewSessionDate] = useState("");
+
+  const [scheduleSubSection, setScheduleSubSection] = useState("eventSettings");
+  const [eventType, setEventType] = useState<"recurring" | "oneTime" | "specificDates" | "onDemandOnly">("recurring");
+  const [eventStartDate, setEventStartDate] = useState("");
+  const [eventEndType, setEventEndType] = useState<"never" | "endDate">("never");
+  const [eventEndDate, setEventEndDate] = useState("");
+  const [timezoneType, setTimezoneType] = useState<"attendee" | "fixed">("fixed");
+  const [showTimezoneOnForm, setShowTimezoneOnForm] = useState(true);
+  const [scheduledTimeSlots, setScheduledTimeSlots] = useState<string[]>(["11:00", "14:00", "18:00"]);
+  const [scheduleFrequency, setScheduleFrequency] = useState("everyDay");
+  const [newTimeSlot, setNewTimeSlot] = useState("09:00");
 
   const [isWebhookOpen, setIsWebhookOpen] = useState(false);
   const [newWebhookEvent, setNewWebhookEvent] = useState("registration");
@@ -244,6 +256,42 @@ export default function AdminWebinarDetail() {
         setRecurringDays(rs.days || []);
         setRecurringTimes((rs.times || []).join(", "));
         setRecurringExcludeDates((rs.excludeDates || []).join(", "));
+        if (rs.times && rs.times.length > 0) {
+          setScheduledTimeSlots(rs.times);
+        }
+      }
+
+      const sm2 = webinar.scheduleMode as any;
+      if (sm2?.onDemand) {
+        setEventType("onDemandOnly");
+      } else if (sm2?.justInTime) {
+        setEventType("oneTime");
+        setScheduleSubSection("justInTime");
+      } else if (rs?.enabled) {
+        setEventType("recurring");
+      } else {
+        setEventType(sm2?.eventType || "oneTime");
+      }
+
+      if (sm2?.eventEndType) {
+        setEventEndType(sm2.eventEndType);
+      }
+      if (sm2?.eventEndDate) {
+        setEventEndDate(sm2.eventEndDate);
+      }
+      if (sm2?.timezoneType) {
+        setTimezoneType(sm2.timezoneType);
+      }
+      if (sm2?.showTimezoneOnForm !== undefined) {
+        setShowTimezoneOnForm(sm2.showTimezoneOnForm);
+      }
+
+      if (rs?.frequency) {
+        setScheduleFrequency(rs.frequency);
+      }
+
+      if (webinar.startTime) {
+        setEventStartDate(new Date(webinar.startTime).toISOString().slice(0, 10));
       }
     }
   }, [webinar]);
@@ -676,286 +724,516 @@ export default function AdminWebinarDetail() {
 
           {/* ===== 排程 (Schedule) Tab ===== */}
           <TabsContent value="schedule">
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">排程設定</CardTitle>
-                  <CardDescription>排程模式、時區與重播設定</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-2">
-                    <Label>排程模式</Label>
-                    <Select value={settingsScheduleMode} onValueChange={setSettingsScheduleMode}>
-                      <SelectTrigger data-testid="select-schedule-mode">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fixed">固定時間</SelectItem>
-                        <SelectItem value="onDemand">隨選觀看</SelectItem>
-                        <SelectItem value="justInTime">即時開始</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {settingsScheduleMode === "justInTime" && (
-                    <div className="space-y-2">
-                      <Label>即時開始分鐘數</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={settingsJitMinutes}
-                        onChange={(e) => setSettingsJitMinutes(e.target.value)}
-                        data-testid="input-jit-minutes"
-                      />
-                      <p className="text-xs text-muted-foreground">觀眾進入後，下一場將在此分鐘數內開始</p>
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label>時區</Label>
-                    <Select value={settingsTimezone} onValueChange={setSettingsTimezone}>
-                      <SelectTrigger data-testid="select-timezone">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Asia/Taipei">Asia/Taipei (台北)</SelectItem>
-                        <SelectItem value="Asia/Tokyo">Asia/Tokyo (東京)</SelectItem>
-                        <SelectItem value="Asia/Shanghai">Asia/Shanghai (上海)</SelectItem>
-                        <SelectItem value="Asia/Hong_Kong">Asia/Hong_Kong (香港)</SelectItem>
-                        <SelectItem value="America/New_York">America/New_York (紐約)</SelectItem>
-                        <SelectItem value="America/Los_Angeles">America/Los_Angeles (洛杉磯)</SelectItem>
-                        <SelectItem value="Europe/London">Europe/London (倫敦)</SelectItem>
-                        <SelectItem value="Europe/Paris">Europe/Paris (巴黎)</SelectItem>
-                        <SelectItem value="Australia/Sydney">Australia/Sydney (雪梨)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <Label>啟用重播</Label>
-                      <Switch
-                        checked={settingsReplayEnabled}
-                        onCheckedChange={setSettingsReplayEnabled}
-                        data-testid="switch-replay-enabled"
-                      />
-                    </div>
-                    {settingsReplayEnabled && (
-                      <div className="space-y-2">
-                        <Label>重播可用時數</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={settingsReplayHours}
-                          onChange={(e) => setSettingsReplayHours(e.target.value)}
-                          data-testid="input-replay-hours"
-                        />
-                        <p className="text-xs text-muted-foreground">直播結束後，重播影片的可用時數</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <Button
-                    onClick={() => {
-                      const scheduleMode = {
-                        recurring: false,
-                        onDemand: settingsScheduleMode === "onDemand",
-                        justInTime: settingsScheduleMode === "justInTime",
-                        justInTimeMinutes: settingsScheduleMode === "justInTime" ? parseInt(settingsJitMinutes) || 15 : 15,
-                      };
-                      updateWebinar.mutate({
-                        scheduleMode,
-                        timezone: settingsTimezone,
-                        replayEnabled: settingsReplayEnabled,
-                        replayAvailableHours: parseInt(settingsReplayHours) || 48,
-                      });
-                    }}
-                    disabled={updateWebinar.isPending}
-                    data-testid="button-save-settings"
-                  >
-                    {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    儲存排程設定
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    場次管理
-                  </CardTitle>
-                  <CardDescription>新增直播場次讓觀眾在報名時自行選擇</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Input
-                      type="datetime-local"
-                      value={newSessionDate}
-                      onChange={(e) => setNewSessionDate(e.target.value)}
-                      data-testid="input-new-session-date"
-                    />
-                    <Button
-                      onClick={async () => {
-                        if (!newSessionDate) return;
-                        try {
-                          await apiRequest("POST", `/api/webinars/${id}/sessions`, {
-                            scheduledStart: new Date(newSessionDate).toISOString(),
-                          });
-                          queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
-                          setNewSessionDate("");
-                          toast({ title: "場次已新增" });
-                        } catch (err: any) {
-                          toast({ title: "新增失敗", description: err.message, variant: "destructive" });
-                        }
-                      }}
-                      disabled={!newSessionDate}
-                      data-testid="button-add-session"
+            <div className="flex flex-col md:flex-row gap-6">
+              <div className="md:w-52 shrink-0">
+                <h3 className="font-semibold mb-3">排程</h3>
+                <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible">
+                  {[
+                    { id: "eventSettings", label: "活動設定", icon: Settings },
+                    { id: "scheduledWebinars", label: "排程場次", icon: Calendar },
+                    { id: "onDemand", label: "隨選觀看", icon: Eye },
+                    { id: "justInTime", label: "即時開始", icon: Clock },
+                    { id: "replays", label: "重播設定", icon: RefreshCw },
+                    { id: "sessionManagement", label: "場次管理", icon: Calendar },
+                  ].map(item => (
+                    <button
+                      key={item.id}
+                      onClick={() => setScheduleSubSection(item.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-2 text-sm text-left whitespace-nowrap transition-colors",
+                        scheduleSubSection === item.id
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-muted-foreground hover-elevate"
+                      )}
+                      data-testid={`button-schedule-nav-${item.id}`}
                     >
-                      <Plus className="h-4 w-4 mr-1" />
-                      新增場次
-                    </Button>
-                  </div>
+                      <item.icon className="h-4 w-4" />
+                      {item.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
 
-                  {webinarSessions && webinarSessions.length > 0 ? (
-                    <div className="space-y-2">
-                      {webinarSessions.map((session) => (
-                        <div key={session.id} className="flex items-center justify-between gap-2 p-3 bg-muted rounded-md">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">
-                              {new Date(session.scheduledStart).toLocaleString("zh-TW", {
-                                year: "numeric", month: "2-digit", day: "2-digit",
-                                hour: "2-digit", minute: "2-digit",
-                              })}
-                            </span>
-                            <Badge variant={
-                              new Date(session.scheduledStart) > new Date() ? "default" : "secondary"
-                            }>
-                              {new Date(session.scheduledStart) > new Date() ? "即將到來" : "已過期"}
-                            </Badge>
+              <div className="flex-1 min-w-0">
+                <Card>
+                  <CardContent className="p-6">
+                    {scheduleSubSection === "eventSettings" && (
+                      <div className="space-y-6">
+                        <h2 className="text-lg font-semibold" data-testid="text-event-settings-title">活動設定</h2>
+
+                        <div className="space-y-3">
+                          <Label className="font-medium">活動類型</Label>
+                          <div className="flex flex-wrap gap-4">
+                            {[
+                              { value: "recurring" as const, label: "循環排程" },
+                              { value: "oneTime" as const, label: "單次活動" },
+                              { value: "specificDates" as const, label: "指定日期時間" },
+                              { value: "onDemandOnly" as const, label: "僅隨選" },
+                            ].map(opt => (
+                              <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="eventType"
+                                  value={opt.value}
+                                  checked={eventType === opt.value}
+                                  onChange={() => setEventType(opt.value)}
+                                  className="accent-primary"
+                                  data-testid={`radio-event-type-${opt.value}`}
+                                />
+                                <span className="text-sm">{opt.label}</span>
+                              </label>
+                            ))}
                           </div>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={async () => {
-                              try {
-                                await apiRequest("DELETE", `/api/webinars/${id}/sessions/${session.id}`);
-                                queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
-                                toast({ title: "場次已刪除" });
-                              } catch (err: any) {
-                                toast({ title: "刪除失敗", description: err.message, variant: "destructive" });
-                              }
-                            }}
-                            data-testid={`button-delete-session-${session.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-2">尚未新增場次，觀眾將無法選擇時段</p>
-                  )}
-                </CardContent>
-              </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    循環排程
-                  </CardTitle>
-                  <CardDescription>自動產生定期直播場次</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>啟用循環排程</Label>
-                    <Switch
-                      checked={recurringEnabled}
-                      onCheckedChange={setRecurringEnabled}
-                      data-testid="switch-recurring-enabled"
-                    />
-                  </div>
-                  {recurringEnabled && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>每週播放日</Label>
-                        <div className="flex flex-wrap gap-2">
-                          {["日", "一", "二", "三", "四", "五", "六"].map((day, i) => (
-                            <Button
-                              key={i}
-                              size="sm"
-                              variant={recurringDays.includes(i) ? "default" : "outline"}
-                              onClick={() => {
-                                setRecurringDays(prev =>
-                                  prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i].sort()
-                                );
-                              }}
-                              data-testid={`button-recurring-day-${i}`}
-                            >
-                              {day}
-                            </Button>
-                          ))}
+                        {eventType !== "onDemandOnly" && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>開始日期</Label>
+                              <Input
+                                type="date"
+                                value={eventStartDate}
+                                onChange={(e) => setEventStartDate(e.target.value)}
+                                data-testid="input-event-start-date"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>結束日期</Label>
+                              <div className="flex items-center gap-4 flex-wrap">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name="eventEndType"
+                                    value="never"
+                                    checked={eventEndType === "never"}
+                                    onChange={() => setEventEndType("never")}
+                                    className="accent-primary"
+                                    data-testid="radio-end-type-never"
+                                  />
+                                  <span className="text-sm">永不結束</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name="eventEndType"
+                                    value="endDate"
+                                    checked={eventEndType === "endDate"}
+                                    onChange={() => setEventEndType("endDate")}
+                                    className="accent-primary"
+                                    data-testid="radio-end-type-date"
+                                  />
+                                  <span className="text-sm">指定結束日期</span>
+                                </label>
+                              </div>
+                              {eventEndType === "endDate" && (
+                                <Input
+                                  type="date"
+                                  value={eventEndDate}
+                                  onChange={(e) => setEventEndDate(e.target.value)}
+                                  data-testid="input-event-end-date"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-4 border-t pt-6 mt-6">
+                          <h3 className="text-base font-semibold">時區</h3>
+                          <div className="flex items-center gap-6 flex-wrap">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="timezoneType"
+                                value="attendee"
+                                checked={timezoneType === "attendee"}
+                                onChange={() => setTimezoneType("attendee")}
+                                className="accent-primary"
+                                data-testid="radio-timezone-attendee"
+                              />
+                              <span className="text-sm">觀眾所在時區</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="timezoneType"
+                                value="fixed"
+                                checked={timezoneType === "fixed"}
+                                onChange={() => setTimezoneType("fixed")}
+                                className="accent-primary"
+                                data-testid="radio-timezone-fixed"
+                              />
+                              <span className="text-sm">固定時區</span>
+                            </label>
+                          </div>
+                          {timezoneType === "fixed" && (
+                            <Select value={settingsTimezone} onValueChange={setSettingsTimezone}>
+                              <SelectTrigger data-testid="select-timezone">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Asia/Taipei">Asia/Taipei (台北)</SelectItem>
+                                <SelectItem value="Asia/Tokyo">Asia/Tokyo (東京)</SelectItem>
+                                <SelectItem value="Asia/Shanghai">Asia/Shanghai (上海)</SelectItem>
+                                <SelectItem value="Asia/Hong_Kong">Asia/Hong_Kong (香港)</SelectItem>
+                                <SelectItem value="America/New_York">America/New_York (紐約)</SelectItem>
+                                <SelectItem value="America/Los_Angeles">America/Los_Angeles (洛杉磯)</SelectItem>
+                                <SelectItem value="Europe/London">Europe/London (倫敦)</SelectItem>
+                                <SelectItem value="Europe/Paris">Europe/Paris (巴黎)</SelectItem>
+                                <SelectItem value="Australia/Sydney">Australia/Sydney (雪梨)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                          <div className="flex items-center justify-between gap-2">
+                            <Label className="text-sm">在報名表單顯示時區</Label>
+                            <Switch
+                              checked={showTimezoneOnForm}
+                              onCheckedChange={setShowTimezoneOnForm}
+                              data-testid="switch-show-timezone"
+                            />
+                          </div>
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>播放時間（多個時間用逗號分隔）</Label>
-                        <Input
-                          value={recurringTimes}
-                          onChange={(e) => setRecurringTimes(e.target.value)}
-                          placeholder="09:00, 14:00, 19:00"
-                          data-testid="input-recurring-times"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>排除日期（用逗號分隔）</Label>
-                        <Input
-                          value={recurringExcludeDates}
-                          onChange={(e) => setRecurringExcludeDates(e.target.value)}
-                          placeholder="2026-01-01, 2026-02-14"
-                          data-testid="input-recurring-exclude"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
+
                         <Button
                           onClick={() => {
+                            const isOnDemand = eventType === "onDemandOnly";
+                            const existingSm = webinar?.scheduleMode as any;
+                            const scheduleMode = {
+                              recurring: eventType === "recurring",
+                              onDemand: isOnDemand,
+                              justInTime: existingSm?.justInTime || false,
+                              justInTimeMinutes: existingSm?.justInTimeMinutes || 15,
+                              eventType,
+                              eventEndType,
+                              eventEndDate: eventEndType === "endDate" ? eventEndDate : null,
+                              timezoneType,
+                              showTimezoneOnForm,
+                            };
                             updateWebinar.mutate({
-                              recurringSchedule: {
-                                enabled: recurringEnabled,
-                                days: recurringDays,
-                                times: recurringTimes.split(",").map(t => t.trim()).filter(Boolean),
-                                excludeDates: recurringExcludeDates.split(",").map(d => d.trim()).filter(Boolean),
-                              },
+                              scheduleMode,
+                              timezone: timezoneType === "fixed" ? settingsTimezone : (webinar?.timezone || "Asia/Taipei"),
+                              startTime: eventStartDate ? new Date(eventStartDate).toISOString() : undefined,
                             });
                           }}
                           disabled={updateWebinar.isPending}
-                          data-testid="button-save-recurring"
+                          data-testid="button-save-event-settings"
                         >
                           {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          儲存循環排程
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            apiRequest("POST", `/api/webinars/${id}/generate-sessions`, { days: 30 })
-                              .then(() => {
-                                toast({ title: "已產生未來 30 天的場次" });
-                              })
-                              .catch((err: any) => {
-                                toast({ title: "產生場次失敗", description: err.message, variant: "destructive" });
-                              });
-                          }}
-                          data-testid="button-generate-sessions"
-                        >
-                          <RefreshCw className="h-4 w-4 mr-1" />
-                          產生未來 30 天場次
+                          儲存活動設定
                         </Button>
                       </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+                    )}
+
+                    {scheduleSubSection === "scheduledWebinars" && (
+                      <div className="space-y-6">
+                        <h2 className="text-lg font-semibold" data-testid="text-scheduled-webinars-title">排程場次</h2>
+                        <p className="text-sm text-muted-foreground">循環活動會自動在指定時間排程</p>
+
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <Select value={scheduleFrequency} onValueChange={setScheduleFrequency}>
+                              <SelectTrigger className="w-40" data-testid="select-schedule-frequency">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="everyDay">每天</SelectItem>
+                                <SelectItem value="everyWeek">每週</SelectItem>
+                                <SelectItem value="everyTwoWeeks">每兩週</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            <span className="text-sm text-muted-foreground">於</span>
+
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {[
+                                { label: "一", value: 1 },
+                                { label: "二", value: 2 },
+                                { label: "三", value: 3 },
+                                { label: "四", value: 4 },
+                                { label: "五", value: 5 },
+                                { label: "六", value: 6 },
+                                { label: "日", value: 0 },
+                              ].map(day => (
+                                <label key={day.value} className="flex items-center gap-1 cursor-pointer">
+                                  <Checkbox
+                                    checked={recurringDays.includes(day.value)}
+                                    onCheckedChange={(checked) => {
+                                      setRecurringDays(prev =>
+                                        checked ? [...prev, day.value].sort() : prev.filter(d => d !== day.value)
+                                      );
+                                    }}
+                                    data-testid={`checkbox-recurring-day-${day.value}`}
+                                  />
+                                  <span className="text-sm">{day.label}</span>
+                                </label>
+                              ))}
+                            </div>
+
+                            <span className="text-sm text-muted-foreground">於以下時間：</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {scheduledTimeSlots.map((time, index) => (
+                              <Badge key={index} variant="secondary" className="gap-1 px-3 py-1.5">
+                                {time}
+                                <button
+                                  onClick={() => setScheduledTimeSlots(prev => prev.filter((_, i) => i !== index))}
+                                  className="ml-1"
+                                  data-testid={`button-remove-time-${index}`}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="time"
+                                value={newTimeSlot}
+                                onChange={(e) => setNewTimeSlot(e.target.value)}
+                                className="w-28"
+                                data-testid="input-new-time-slot"
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  if (newTimeSlot && /^\d{2}:\d{2}$/.test(newTimeSlot)) {
+                                    setScheduledTimeSlots(prev => [...prev, newTimeSlot].sort());
+                                    setNewTimeSlot("09:00");
+                                  }
+                                }}
+                                data-testid="button-add-time-slot"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>排除日期（用逗號分隔）</Label>
+                          <Input
+                            value={recurringExcludeDates}
+                            onChange={(e) => setRecurringExcludeDates(e.target.value)}
+                            placeholder="2026-01-01, 2026-02-14"
+                            data-testid="input-recurring-exclude"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Button
+                            onClick={() => {
+                              updateWebinar.mutate({
+                                recurringSchedule: {
+                                  enabled: true,
+                                  frequency: scheduleFrequency,
+                                  days: recurringDays,
+                                  times: scheduledTimeSlots,
+                                  excludeDates: recurringExcludeDates.split(",").map(d => d.trim()).filter(Boolean),
+                                },
+                              });
+                            }}
+                            disabled={updateWebinar.isPending}
+                            data-testid="button-save-recurring"
+                          >
+                            {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            儲存排程設定
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              apiRequest("POST", `/api/webinars/${id}/generate-sessions`, { days: 30 })
+                                .then(() => {
+                                  queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
+                                  toast({ title: "已產生未來 30 天的場次" });
+                                })
+                                .catch((err: any) => {
+                                  toast({ title: "產生場次失敗", description: err.message, variant: "destructive" });
+                                });
+                            }}
+                            data-testid="button-generate-sessions"
+                          >
+                            <RefreshCw className="h-4 w-4 mr-1" />
+                            產生未來 30 天場次
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {scheduleSubSection === "onDemand" && (
+                      <div className="space-y-6">
+                        <h2 className="text-lg font-semibold" data-testid="text-on-demand-title">隨選觀看</h2>
+                        <p className="text-sm text-muted-foreground">觀眾可以隨時觀看直播錄影</p>
+                        <div className="p-4 bg-muted rounded-md">
+                          <p className="text-sm">啟用隨選觀看模式後，觀眾無需等待特定時間即可觀看。</p>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            setSettingsScheduleMode("onDemand");
+                            setEventType("onDemandOnly");
+                            updateWebinar.mutate({
+                              scheduleMode: { recurring: false, onDemand: true, justInTime: false, justInTimeMinutes: 15 },
+                            });
+                          }}
+                          disabled={updateWebinar.isPending}
+                          data-testid="button-enable-on-demand"
+                        >
+                          {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          啟用隨選觀看
+                        </Button>
+                      </div>
+                    )}
+
+                    {scheduleSubSection === "justInTime" && (
+                      <div className="space-y-6">
+                        <h2 className="text-lg font-semibold" data-testid="text-jit-title">即時開始</h2>
+                        <p className="text-sm text-muted-foreground">觀眾進入後，在指定分鐘內自動開始直播</p>
+                        <div className="space-y-2">
+                          <Label>等待分鐘數</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={settingsJitMinutes}
+                            onChange={(e) => setSettingsJitMinutes(e.target.value)}
+                            data-testid="input-jit-minutes"
+                          />
+                          <p className="text-xs text-muted-foreground">觀眾進入後，下一場將在此分鐘數內開始</p>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            setSettingsScheduleMode("justInTime");
+                            updateWebinar.mutate({
+                              scheduleMode: { recurring: false, onDemand: false, justInTime: true, justInTimeMinutes: parseInt(settingsJitMinutes) || 15 },
+                            });
+                          }}
+                          disabled={updateWebinar.isPending}
+                          data-testid="button-save-jit"
+                        >
+                          {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          儲存即時開始設定
+                        </Button>
+                      </div>
+                    )}
+
+                    {scheduleSubSection === "replays" && (
+                      <div className="space-y-6">
+                        <h2 className="text-lg font-semibold" data-testid="text-replays-title">重播設定</h2>
+                        <p className="text-sm text-muted-foreground">直播結束後的重播影片設定</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <Label>啟用重播</Label>
+                          <Switch
+                            checked={settingsReplayEnabled}
+                            onCheckedChange={setSettingsReplayEnabled}
+                            data-testid="switch-replay-enabled"
+                          />
+                        </div>
+                        {settingsReplayEnabled && (
+                          <div className="space-y-2">
+                            <Label>重播可用時數</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={settingsReplayHours}
+                              onChange={(e) => setSettingsReplayHours(e.target.value)}
+                              data-testid="input-replay-hours"
+                            />
+                            <p className="text-xs text-muted-foreground">直播結束後，重播影片的可用時數</p>
+                          </div>
+                        )}
+                        <Button
+                          onClick={() => {
+                            updateWebinar.mutate({
+                              replayEnabled: settingsReplayEnabled,
+                              replayAvailableHours: parseInt(settingsReplayHours) || 48,
+                            });
+                          }}
+                          disabled={updateWebinar.isPending}
+                          data-testid="button-save-replay"
+                        >
+                          {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          儲存重播設定
+                        </Button>
+                      </div>
+                    )}
+
+                    {scheduleSubSection === "sessionManagement" && (
+                      <div className="space-y-6">
+                        <h2 className="text-lg font-semibold" data-testid="text-session-mgmt-title">場次管理</h2>
+                        <p className="text-sm text-muted-foreground">新增直播場次讓觀眾在報名時自行選擇</p>
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Input
+                            type="datetime-local"
+                            value={newSessionDate}
+                            onChange={(e) => setNewSessionDate(e.target.value)}
+                            data-testid="input-new-session-date"
+                          />
+                          <Button
+                            onClick={async () => {
+                              if (!newSessionDate) return;
+                              try {
+                                await apiRequest("POST", `/api/webinars/${id}/sessions`, {
+                                  scheduledStart: new Date(newSessionDate).toISOString(),
+                                });
+                                queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
+                                setNewSessionDate("");
+                                toast({ title: "場次已新增" });
+                              } catch (err: any) {
+                                toast({ title: "新增失敗", description: err.message, variant: "destructive" });
+                              }
+                            }}
+                            disabled={!newSessionDate}
+                            data-testid="button-add-session"
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            新增場次
+                          </Button>
+                        </div>
+
+                        {webinarSessions && webinarSessions.length > 0 ? (
+                          <div className="space-y-2">
+                            {webinarSessions.map((session) => (
+                              <div key={session.id} className="flex items-center justify-between gap-2 p-3 bg-muted rounded-md">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Clock className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-sm">
+                                    {new Date(session.scheduledStart).toLocaleString("zh-TW", {
+                                      year: "numeric", month: "2-digit", day: "2-digit",
+                                      hour: "2-digit", minute: "2-digit",
+                                    })}
+                                  </span>
+                                  <Badge variant={
+                                    new Date(session.scheduledStart) > new Date() ? "default" : "secondary"
+                                  }>
+                                    {new Date(session.scheduledStart) > new Date() ? "即將到來" : "已過期"}
+                                  </Badge>
+                                </div>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={async () => {
+                                    try {
+                                      await apiRequest("DELETE", `/api/webinars/${id}/sessions/${session.id}`);
+                                      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
+                                      toast({ title: "場次已刪除" });
+                                    } catch (err: any) {
+                                      toast({ title: "刪除失敗", description: err.message, variant: "destructive" });
+                                    }
+                                  }}
+                                  data-testid={`button-delete-session-${session.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground text-center py-2">尚未新增場次，觀眾將無法選擇時段</p>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </TabsContent>
 
