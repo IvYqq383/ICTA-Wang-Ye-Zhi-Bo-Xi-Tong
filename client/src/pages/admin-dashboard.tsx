@@ -14,11 +14,12 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { 
   Plus, Video, Calendar, 
   ExternalLink, Loader2, LogOut, Radio, Copy,
   BarChart3, Users, Pencil, Share2, MessageCircle,
-  Eye, Code, Trash2
+  Eye, Code, Trash2, MoreVertical
 } from "lucide-react";
 import type { Webinar } from "@shared/schema";
 
@@ -376,44 +377,22 @@ export default function AdminDashboard() {
                         </div>
                       </div>
 
-                      {/* Right: Quick Actions */}
-                      <div className="flex md:flex-col items-center md:items-stretch gap-1 p-3 md:border-l border-t md:border-t-0 flex-wrap justify-center">
+                      {/* Right: Quick Actions - 4 buttons */}
+                      <div className="flex md:flex-col items-center md:items-stretch gap-1 p-3 md:border-l border-t md:border-t-0 flex-wrap justify-center md:w-36 shrink-0">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="justify-start gap-2 text-xs"
-                          onClick={() => setLocation(`/admin/webinar/${webinar.id}`)}
-                          data-testid={`button-analytics-${webinar.id}`}
-                        >
-                          <BarChart3 className="h-3.5 w-3.5" />
-                          <span className="hidden md:inline">統計分析</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="justify-start gap-2 text-xs"
-                          onClick={() => {
-                            setLocation(`/admin/webinar/${webinar.id}`);
-                          }}
-                          data-testid={`button-registrants-${webinar.id}`}
-                        >
-                          <Users className="h-3.5 w-3.5" />
-                          <span className="hidden md:inline">報名列表</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="justify-start gap-2 text-xs"
+                          className="justify-start gap-2 text-xs w-full"
                           onClick={() => setLocation(`/admin/webinar/${webinar.id}`)}
                           data-testid={`button-edit-${webinar.id}`}
                         >
                           <Pencil className="h-3.5 w-3.5" />
-                          <span className="hidden md:inline">編輯</span>
+                          <span className="hidden md:inline">編輯管理</span>
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="justify-start gap-2 text-xs"
+                          className="justify-start gap-2 text-xs w-full"
                           onClick={() => setLocation(`/admin/webinar/${webinar.id}/control`)}
                           data-testid={`button-control-${webinar.id}`}
                         >
@@ -423,7 +402,7 @@ export default function AdminDashboard() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="justify-start gap-2 text-xs"
+                          className="justify-start gap-2 text-xs w-full"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleShare(webinar);
@@ -431,67 +410,76 @@ export default function AdminDashboard() {
                           data-testid={`button-share-${webinar.id}`}
                         >
                           <Share2 className="h-3.5 w-3.5" />
-                          <span className="hidden md:inline">分享</span>
+                          <span className="hidden md:inline">分享連結</span>
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="justify-start gap-2 text-xs"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            duplicateMutation.mutate(webinar.id);
-                          }}
-                          disabled={duplicateMutation.isPending}
-                          data-testid={`button-duplicate-${webinar.id}`}
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                          <span className="hidden md:inline">複製</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="justify-start gap-2 text-xs"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(`/register/${webinar.id}`, "_blank");
-                          }}
-                          data-testid={`button-view-registration-${webinar.id}`}
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                          <span className="hidden md:inline">報名頁</span>
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="justify-start gap-2 text-xs text-destructive hover:text-destructive"
-                              data-testid={`button-delete-${webinar.id}`}
+                              className="justify-start gap-2 text-xs w-full"
+                              data-testid={`button-more-${webinar.id}`}
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span className="hidden md:inline">刪除</span>
+                              <MoreVertical className="h-3.5 w-3.5" />
+                              <span className="hidden md:inline">更多</span>
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>確定要刪除此直播間？</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                將會刪除「{webinar.title}」及其所有相關資料（報名記錄、聊天訊息、分析數據等），此操作無法復原。
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel data-testid="button-cancel-delete">取消</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deleteMutation.mutate(webinar.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                data-testid="button-confirm-delete"
-                              >
-                                {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                                確定刪除
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(`/register/${webinar.id}`, "_blank");
+                              }}
+                              data-testid={`button-view-registration-${webinar.id}`}
+                            >
+                              <ExternalLink className="h-3.5 w-3.5 mr-2" />
+                              報名頁預覽
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                duplicateMutation.mutate(webinar.id);
+                              }}
+                              disabled={duplicateMutation.isPending}
+                              data-testid={`button-duplicate-${webinar.id}`}
+                            >
+                              <Copy className="h-3.5 w-3.5 mr-2" />
+                              複製直播間
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem
+                                  onSelect={(e) => e.preventDefault()}
+                                  className="text-destructive focus:text-destructive"
+                                  data-testid={`button-delete-${webinar.id}`}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                  刪除
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>確定要刪除此直播間？</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    將會刪除「{webinar.title}」及其所有相關資料（報名記錄、聊天訊息、分析數據等），此操作無法復原。
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel data-testid="button-cancel-delete">取消</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteMutation.mutate(webinar.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    data-testid="button-confirm-delete"
+                                  >
+                                    {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                                    確定刪除
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </CardContent>
