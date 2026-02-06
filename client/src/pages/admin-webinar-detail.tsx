@@ -2901,13 +2901,13 @@ export default function AdminWebinarDetail() {
                   <div>
                     <p className="text-sm font-medium mb-2">或用 JavaScript 直接呼叫</p>
                     <div className="relative">
-                      <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all">{`LiveCast.openRegister("${id}");`}</pre>
+                      <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all">{`ICTA_WEBINAR.openRegister("${id}");`}</pre>
                       <Button
                         variant="outline"
                         size="icon"
                         className="absolute top-2 right-2"
                         onClick={() => {
-                          navigator.clipboard.writeText(`LiveCast.openRegister("${id}");`);
+                          navigator.clipboard.writeText(`ICTA_WEBINAR.openRegister("${id}");`);
                           toast({ title: "已複製" });
                         }}
                       >

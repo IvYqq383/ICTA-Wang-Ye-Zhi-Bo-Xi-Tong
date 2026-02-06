@@ -117,12 +117,14 @@
     }
   });
 
-  window.LiveCast = {
+  window.ICTA_WEBINAR = {
     version: WIDGET_VERSION,
     openRegister: openPopup,
     embedRegister: createInlineWidget,
     init: initButtons,
   };
+
+  window.LiveCast = window.ICTA_WEBINAR;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initButtons);

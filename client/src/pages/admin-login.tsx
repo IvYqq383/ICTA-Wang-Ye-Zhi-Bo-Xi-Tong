@@ -9,41 +9,75 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2, Video } from "lucide-react";
+import { Loader2, Radio } from "lucide-react";
 
 const loginSchema = z.object({
-  username: z.string().min(1, "請輸入帳號"),
-  password: z.string().min(1, "請輸入密碼"),
+  username: z.string().min(1, "Please enter username"),
+  password: z.string().min(1, "Please enter password"),
+});
+
+const registerSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  email: z.string().email("Please enter a valid email"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string().min(1, "Please confirm your password"),
+  companyName: z.string().optional(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
+type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [mode, setMode] = useState<"login" | "register">("login");
 
-  const form = useForm<LoginForm>({
+  const loginForm = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      username: "",
-      password: "",
-    },
+    defaultValues: { username: "", password: "" },
   });
 
-  const onSubmit = async (data: LoginForm) => {
+  const registerForm = useForm<RegisterForm>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: { username: "", email: "", password: "", confirmPassword: "", companyName: "" },
+  });
+
+  const onLogin = async (data: LoginForm) => {
     setIsLoading(true);
     try {
       await apiRequest("POST", "/api/admin/login", data);
-      toast({
-        title: "登入成功",
-        description: "歡迎回來！",
-      });
+      toast({ title: "Welcome back!" });
       setLocation("/admin/dashboard");
     } catch (error: any) {
       toast({
-        title: "登入失敗",
-        description: error.message || "帳號或密碼錯誤",
+        title: "Login failed",
+        description: error.message || "Invalid credentials",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const onRegister = async (data: RegisterForm) => {
+    setIsLoading(true);
+    try {
+      await apiRequest("POST", "/api/admin/register", {
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        companyName: data.companyName || "",
+      });
+      toast({ title: "Registration successful!" });
+      setLocation("/admin/dashboard");
+    } catch (error: any) {
+      toast({
+        title: "Registration failed",
+        description: error.message || "Please try again",
         variant: "destructive",
       });
     } finally {
@@ -52,74 +86,158 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <Card className="max-w-md w-full">
-        <CardHeader className="text-center">
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Video className="w-8 h-8 text-primary" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex flex-col items-center justify-center p-4">
+      <div className="mb-8 text-center">
+        <div className="flex items-center justify-center gap-3 mb-3">
+          <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+            <Radio className="w-5 h-5 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl">管理後台</CardTitle>
-          <CardDescription>請登入以管理直播間</CardDescription>
+          <h1 className="text-3xl font-bold text-white tracking-tight">ICTA-WEBINAR</h1>
+        </div>
+        <p className="text-slate-400 text-sm">Automated Webinar Platform</p>
+      </div>
+
+      <Card className="max-w-md w-full">
+        <CardHeader className="text-center pb-4">
+          <CardTitle className="text-xl">
+            {mode === "login" ? "Sign In" : "Create Account"}
+          </CardTitle>
+          <CardDescription>
+            {mode === "login"
+              ? "Sign in to manage your webinars"
+              : "Start automating your webinars today"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>帳號</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="請輸入帳號"
-                        {...field}
-                        data-testid="input-username"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {mode === "login" ? (
+            <Form {...loginForm}>
+              <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
+                <FormField
+                  control={loginForm.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Username</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter username" {...field} data-testid="input-username" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={loginForm.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="Enter password" {...field} data-testid="input-password" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-login">
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Sign In
+                </Button>
+              </form>
+            </Form>
+          ) : (
+            <Form {...registerForm}>
+              <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
+                <FormField
+                  control={registerForm.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Username</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Choose a username" {...field} data-testid="input-reg-username" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={registerForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="your@email.com" {...field} data-testid="input-reg-email" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={registerForm.control}
+                  name="companyName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Name <span className="text-muted-foreground text-xs">(optional)</span></FormLabel>
+                      <FormControl>
+                        <Input placeholder="Your company" {...field} data-testid="input-reg-company" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={registerForm.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="At least 6 characters" {...field} data-testid="input-reg-password" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={registerForm.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="Confirm password" {...field} data-testid="input-reg-confirm" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-register">
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Create Account
+                </Button>
+              </form>
+            </Form>
+          )}
 
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>密碼</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="請輸入密碼"
-                        {...field}
-                        data-testid="input-password"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading}
-                data-testid="button-login"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    登入中...
-                  </>
-                ) : (
-                  "登入"
-                )}
-              </Button>
-            </form>
-          </Form>
+          <div className="mt-6 text-center">
+            <button
+              type="button"
+              onClick={() => setMode(mode === "login" ? "register" : "login")}
+              className="text-sm text-primary hover:underline"
+              data-testid="button-toggle-mode"
+            >
+              {mode === "login"
+                ? "Don't have an account? Sign up"
+                : "Already have an account? Sign in"}
+            </button>
+          </div>
         </CardContent>
       </Card>
+
+      <p className="mt-6 text-slate-500 text-xs">
+        Powered by ICTA-WEBINAR
+      </p>
     </div>
   );
 }

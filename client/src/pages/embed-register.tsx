@@ -283,7 +283,7 @@ export default function EmbedRegister() {
                 </div>
               </ScrollArea>
               <div className="border-t px-3 py-1.5 text-center">
-                <span className="text-[10px] text-muted-foreground opacity-60">Powered by LiveCast</span>
+                <span className="text-[10px] text-muted-foreground opacity-60">Powered by ICTA-WEBINAR</span>
               </div>
             </div>
           )}
@@ -362,7 +362,7 @@ export default function EmbedRegister() {
       </Form>
 
       <p className="text-[10px] text-muted-foreground text-center mt-3 opacity-50">
-        Powered by LiveCast
+        Powered by ICTA-WEBINAR
       </p>
     </div>
   );

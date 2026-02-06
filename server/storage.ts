@@ -32,6 +32,7 @@ export interface IStorage {
   createWebinar(data: InsertWebinar): Promise<Webinar>;
   getWebinar(id: string): Promise<Webinar | undefined>;
   getAllWebinars(): Promise<Webinar[]>;
+  getWebinarsByUser(userId: string): Promise<Webinar[]>;
   updateWebinar(id: string, data: Partial<InsertWebinar>): Promise<Webinar | undefined>;
   deleteWebinar(id: string): Promise<void>;
   
@@ -155,6 +156,10 @@ export class DatabaseStorage implements IStorage {
 
   async getAllWebinars(): Promise<Webinar[]> {
     return db.select().from(webinars).orderBy(desc(webinars.createdAt));
+  }
+
+  async getWebinarsByUser(userId: string): Promise<Webinar[]> {
+    return db.select().from(webinars).where(eq(webinars.userId, userId)).orderBy(desc(webinars.createdAt));
   }
 
   async updateWebinar(id: string, data: Partial<InsertWebinar>): Promise<Webinar | undefined> {

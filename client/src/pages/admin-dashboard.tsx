@@ -170,9 +170,11 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Video className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold">LiveCast 管理後台</h1>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <Radio className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <h1 className="text-xl font-bold tracking-tight">ICTA-WEBINAR</h1>
           </div>
           <Button variant="ghost" onClick={handleLogout} data-testid="button-logout">
             <LogOut className="h-4 w-4 mr-2" />

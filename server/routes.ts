@@ -24,32 +24,38 @@ import {
   insertWebhookSchema,
 } from "@shared/schema";
 
-// Session type extension
+import bcrypt from "bcryptjs";
+
 declare module "express-session" {
   interface SessionData {
-    isAdmin?: boolean;
+    userId?: string;
   }
 }
 
-// Admin credentials
-const ADMIN_USERNAME = "admin";
-const ADMIN_PASSWORD = "aa3210";
-
-// WebSocket connections - now session-based for viewer isolation
-// Key: sessionId (unique per viewer session)
 const sessionConnections = new Map<string, WebSocket>();
-// Key: webinarId, Value: Set of sessionIds (for tracking)
 const webinarSessions = new Map<string, Set<string>>();
-// Host connections per webinar (can see all sessions)
 const hostConnections = new Map<string, Set<WebSocket>>();
 
-// Middleware for admin routes
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (req.session?.isAdmin) {
+  if (req.session?.userId) {
     next();
   } else {
     res.status(401).json({ message: "Unauthorized" });
   }
+}
+
+async function requireWebinarOwner(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.userId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  const webinarId = req.params.id;
+  if (webinarId) {
+    const webinar = await storage.getWebinar(webinarId);
+    if (!webinar || webinar.userId !== req.session.userId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+  }
+  next();
 }
 
 export async function registerRoutes(
@@ -418,16 +424,46 @@ export async function registerRoutes(
     }
   }
 
-  // ============ Admin Auth Routes ============
-  app.post("/api/admin/login", (req, res) => {
-    const { username, password } = req.body;
-    
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      req.session.isAdmin = true;
-      res.json({ success: true });
-    } else {
-      res.status(401).json({ message: "帳號或密碼錯誤" });
+  // ============ Auth Routes ============
+  app.post("/api/admin/register", async (req, res) => {
+    try {
+      const { username, password, email, companyName } = req.body;
+      if (!username || !password || !email) {
+        return res.status(400).json({ message: "請填寫所有必填欄位" });
+      }
+      if (password.length < 6) {
+        return res.status(400).json({ message: "密碼至少需要 6 個字元" });
+      }
+      const existing = await storage.getUserByUsername(username);
+      if (existing) {
+        return res.status(409).json({ message: "此帳號已被使用" });
+      }
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const user = await storage.createUser({
+        username,
+        password: hashedPassword,
+        email,
+        companyName: companyName || "",
+      });
+      req.session.userId = user.id;
+      res.json({ success: true, user: { id: user.id, username: user.username, email: user.email, companyName: user.companyName } });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "註冊失敗" });
     }
+  });
+
+  app.post("/api/admin/login", async (req, res) => {
+    const { username, password } = req.body;
+    const user = await storage.getUserByUsername(username);
+    if (!user) {
+      return res.status(401).json({ message: "帳號或密碼錯誤" });
+    }
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) {
+      return res.status(401).json({ message: "帳號或密碼錯誤" });
+    }
+    req.session.userId = user.id;
+    res.json({ success: true, user: { id: user.id, username: user.username, email: user.email, companyName: user.companyName } });
   });
 
   app.post("/api/admin/logout", (req, res) => {
@@ -436,15 +472,25 @@ export async function registerRoutes(
     });
   });
 
+  app.get("/api/admin/me", requireAdmin, async (req, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    res.json({ id: user.id, username: user.username, email: user.email, companyName: user.companyName });
+  });
+
   // ============ Webinar Routes ============
   app.get("/api/webinars", async (req, res) => {
+    if (req.session?.userId) {
+      const webinars = await storage.getWebinarsByUser(req.session.userId);
+      return res.json(webinars);
+    }
     const webinars = await storage.getAllWebinars();
     res.json(webinars);
   });
 
   app.get("/api/webinars/stats/summary", requireAdmin, async (req, res) => {
     try {
-      const allWebinars = await storage.getAllWebinars();
+      const allWebinars = await storage.getWebinarsByUser(req.session.userId!);
       const stats: Record<string, { registered: number; attended: number; engaged: number; onlineCount: number }> = {};
       
       for (const webinar of allWebinars) {
@@ -480,7 +526,7 @@ export async function registerRoutes(
 
   app.post("/api/webinars", requireAdmin, async (req, res) => {
     try {
-      const data = insertWebinarSchema.parse(req.body);
+      const data = insertWebinarSchema.parse({ ...req.body, userId: req.session.userId });
       const webinar = await storage.createWebinar(data);
       res.json(webinar);
     } catch (error: any) {
@@ -488,12 +534,12 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/webinars/:id", requireAdmin, async (req, res) => {
+  app.delete("/api/webinars/:id", requireWebinarOwner, async (req, res) => {
     await storage.deleteWebinar(req.params.id as string);
     res.json({ success: true });
   });
 
-  app.patch("/api/webinars/:id", requireAdmin, async (req, res) => {
+  app.patch("/api/webinars/:id", requireWebinarOwner, async (req, res) => {
     try {
       const data = { ...req.body };
       if (data.startTime && typeof data.startTime === "string") {
@@ -563,7 +609,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/webinars/:id/registrations", requireAdmin, async (req, res) => {
+  app.get("/api/webinars/:id/registrations", requireWebinarOwner, async (req, res) => {
     const registrations = await storage.getRegistrationsByWebinar(req.params.id as string);
     res.json(registrations);
   });
@@ -605,7 +651,7 @@ export async function registerRoutes(
     res.json(fakeUsers);
   });
 
-  app.post("/api/webinars/:id/fake-users", requireAdmin, async (req, res) => {
+  app.post("/api/webinars/:id/fake-users", requireWebinarOwner, async (req, res) => {
     try {
       const data = insertFakeUserSchema.parse({
         ...req.body,
@@ -618,7 +664,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/webinars/:id/fake-users/:userId", requireAdmin, async (req, res) => {
+  app.delete("/api/webinars/:id/fake-users/:userId", requireWebinarOwner, async (req, res) => {
     await storage.deleteFakeUser(req.params.userId as string);
     res.json({ success: true });
   });
@@ -629,7 +675,7 @@ export async function registerRoutes(
     res.json(messages);
   });
 
-  app.post("/api/webinars/:id/scheduled-messages", requireAdmin, async (req, res) => {
+  app.post("/api/webinars/:id/scheduled-messages", requireWebinarOwner, async (req, res) => {
     try {
       const data = insertScheduledMessageSchema.parse({
         ...req.body,
@@ -642,7 +688,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/webinars/:id/scheduled-messages/:msgId", requireAdmin, async (req, res) => {
+  app.delete("/api/webinars/:id/scheduled-messages/:msgId", requireWebinarOwner, async (req, res) => {
     await storage.deleteScheduledMessage(req.params.msgId as string);
     res.json({ success: true });
   });
@@ -653,7 +699,7 @@ export async function registerRoutes(
     res.json(ctas);
   });
 
-  app.post("/api/webinars/:id/ctas", requireAdmin, async (req, res) => {
+  app.post("/api/webinars/:id/ctas", requireWebinarOwner, async (req, res) => {
     try {
       const data = insertCtaButtonSchema.parse({
         ...req.body,
@@ -666,7 +712,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/webinars/:id/ctas/:ctaId", requireAdmin, async (req, res) => {
+  app.delete("/api/webinars/:id/ctas/:ctaId", requireWebinarOwner, async (req, res) => {
     await storage.deleteCtaButton(req.params.ctaId as string);
     res.json({ success: true });
   });
@@ -677,7 +723,7 @@ export async function registerRoutes(
     res.json(polls);
   });
 
-  app.post("/api/webinars/:id/polls", requireAdmin, async (req, res) => {
+  app.post("/api/webinars/:id/polls", requireWebinarOwner, async (req, res) => {
     try {
       const data = insertPollSchema.parse({
         ...req.body,
@@ -690,7 +736,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/webinars/:id/polls/:pollId", requireAdmin, async (req, res) => {
+  app.delete("/api/webinars/:id/polls/:pollId", requireWebinarOwner, async (req, res) => {
     await storage.deletePoll(req.params.pollId as string);
     res.json({ success: true });
   });
@@ -701,7 +747,7 @@ export async function registerRoutes(
     res.json(tipsList);
   });
 
-  app.post("/api/webinars/:id/tips", requireAdmin, async (req, res) => {
+  app.post("/api/webinars/:id/tips", requireWebinarOwner, async (req, res) => {
     try {
       const data = insertTipSchema.parse({
         ...req.body,
@@ -714,7 +760,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/webinars/:id/tips/:tipId", requireAdmin, async (req, res) => {
+  app.delete("/api/webinars/:id/tips/:tipId", requireWebinarOwner, async (req, res) => {
     await storage.deleteTip(req.params.tipId as string);
     res.json({ success: true });
   });
@@ -743,7 +789,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/webinars/:id/questions/:questionId", requireAdmin, async (req, res) => {
+  app.patch("/api/webinars/:id/questions/:questionId", requireWebinarOwner, async (req, res) => {
     try {
       const question = await storage.updateQuestion(req.params.questionId as string, req.body);
       res.json(question);
@@ -752,7 +798,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/webinars/:id/questions/:questionId", requireAdmin, async (req, res) => {
+  app.delete("/api/webinars/:id/questions/:questionId", requireWebinarOwner, async (req, res) => {
     await storage.deleteQuestion(req.params.questionId as string);
     res.json({ success: true });
   });
@@ -763,7 +809,7 @@ export async function registerRoutes(
     res.json(survey || null);
   });
 
-  app.post("/api/webinars/:id/feedback-survey", requireAdmin, async (req, res) => {
+  app.post("/api/webinars/:id/feedback-survey", requireWebinarOwner, async (req, res) => {
     try {
       const data = insertFeedbackSurveySchema.parse({
         ...req.body,
@@ -776,7 +822,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/webinars/:id/feedback-survey/:surveyId", requireAdmin, async (req, res) => {
+  app.patch("/api/webinars/:id/feedback-survey/:surveyId", requireWebinarOwner, async (req, res) => {
     try {
       const survey = await storage.updateFeedbackSurvey(req.params.surveyId as string, req.body);
       res.json(survey);
@@ -821,7 +867,7 @@ export async function registerRoutes(
   });
 
   // ============ Analytics Routes ============
-  app.get("/api/webinars/:id/analytics", requireAdmin, async (req, res) => {
+  app.get("/api/webinars/:id/analytics", requireWebinarOwner, async (req, res) => {
     const webinarId = req.params.id as string;
     const webinar = await storage.getWebinar(webinarId);
     if (!webinar) {
@@ -858,7 +904,7 @@ export async function registerRoutes(
     res.json(sessions);
   });
 
-  app.post("/api/webinars/:id/sessions", requireAdmin, async (req, res) => {
+  app.post("/api/webinars/:id/sessions", requireWebinarOwner, async (req, res) => {
     try {
       const body = {
         ...req.body,
@@ -876,7 +922,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/webinars/:id/sessions/:sessionId", requireAdmin, async (req, res) => {
+  app.delete("/api/webinars/:id/sessions/:sessionId", requireWebinarOwner, async (req, res) => {
     try {
       await storage.deleteWebinarSession(req.params.sessionId);
       res.json({ success: true });
@@ -886,7 +932,7 @@ export async function registerRoutes(
   });
 
   // ============ Webinar Duplication ============
-  app.post("/api/webinars/:id/duplicate", requireAdmin, async (req, res) => {
+  app.post("/api/webinars/:id/duplicate", requireWebinarOwner, async (req, res) => {
     try {
       const sourceWebinar = await storage.getWebinar(req.params.id as string);
       if (!sourceWebinar) {
@@ -907,6 +953,7 @@ export async function registerRoutes(
         replayEnabled: sourceWebinar.replayEnabled ?? undefined,
         replayAvailableHours: sourceWebinar.replayAvailableHours ?? undefined,
         emailSettings: sourceWebinar.emailSettings as any,
+        userId: req.session.userId,
       });
 
       const [sourceFakeUsers, sourceMessages, sourceCtas, sourcePolls, sourceTips] = await Promise.all([
@@ -1036,7 +1083,7 @@ export async function registerRoutes(
   });
 
   // ============ Recurring Schedule Generation ============
-  app.post("/api/webinars/:id/generate-sessions", requireAdmin, async (req, res) => {
+  app.post("/api/webinars/:id/generate-sessions", requireWebinarOwner, async (req, res) => {
     try {
       const webinar = await storage.getWebinar(req.params.id as string);
       if (!webinar) {
@@ -1142,12 +1189,12 @@ export async function registerRoutes(
     }
   }
 
-  app.get("/api/webinars/:id/webhooks", requireAdmin, async (req, res) => {
+  app.get("/api/webinars/:id/webhooks", requireWebinarOwner, async (req, res) => {
     const hooks = await storage.getWebhooksByWebinar(req.params.id as string);
     res.json(hooks);
   });
 
-  app.post("/api/webinars/:id/webhooks", requireAdmin, async (req, res) => {
+  app.post("/api/webinars/:id/webhooks", requireWebinarOwner, async (req, res) => {
     try {
       const data = insertWebhookSchema.parse({ ...req.body, webinarId: req.params.id });
       const hook = await storage.createWebhook(data);
@@ -1157,7 +1204,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/webinars/:id/webhooks/:hookId", requireAdmin, async (req, res) => {
+  app.patch("/api/webinars/:id/webhooks/:hookId", requireWebinarOwner, async (req, res) => {
     try {
       const hook = await storage.updateWebhook(req.params.hookId as string, req.body);
       res.json(hook);
@@ -1166,13 +1213,13 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/webinars/:id/webhooks/:hookId", requireAdmin, async (req, res) => {
+  app.delete("/api/webinars/:id/webhooks/:hookId", requireWebinarOwner, async (req, res) => {
     await storage.deleteWebhook(req.params.hookId as string);
     res.json({ success: true });
   });
 
   // ============ CSV Export ============
-  app.get("/api/webinars/:id/registrations/export", requireAdmin, async (req, res) => {
+  app.get("/api/webinars/:id/registrations/export", requireWebinarOwner, async (req, res) => {
     try {
       const regs = await storage.getRegistrationsByWebinar(req.params.id as string);
       const headers = ["Name", "Email", "Registered At", "Attended", "Attended At", "Left At", "Watch Duration (s)", "UTM Source", "UTM Medium", "UTM Campaign", "UTM Term", "UTM Content", "Landing URL"];

@@ -1,7 +1,17 @@
-# LiveCast - 線上模擬直播研討會 SaaS 系統
+# ICTA-WEBINAR - Automated Webinar SaaS Platform
 
 ## 專案概述
-一個「模擬直播」研討會平台，使用預錄的 Vimeo 影片營造直播體驗。支援多場直播管理，可作為 SaaS 出租給他人使用。
+一個多租戶 SaaS「模擬直播」研討會平台，使用預錄的 Vimeo 影片營造直播體驗。用戶可註冊帳號獨立管理自己的直播間，完整的租戶資料隔離。
+
+## 品牌
+- 品牌名稱：ICTA-WEBINAR（前身 LiveCast）
+- Widget JS 同時支援 `window.ICTA_WEBINAR` 和 `window.LiveCast`（向下相容）
+
+## 多租戶架構
+- **用戶註冊**：bcrypt 密碼雜湊（10 rounds），支援 username/email/password/companyName
+- **Session 管理**：session 存 userId，非 isAdmin boolean
+- **資料隔離**：所有 admin 路由使用 requireWebinarOwner 中間件驗證 webinar 所有權
+- **預設管理員**：admin / aa3210（已 bcrypt 雜湊）
 
 ## 核心功能
 

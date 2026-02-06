@@ -6,6 +6,7 @@ import { z } from "zod";
 // Webinars (直播間) - 擴展版
 export const webinars = pgTable("webinars", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"),
   title: text("title").notNull(),
   description: text("description"),
   vimeoUrl: text("vimeo_url").notNull(),
@@ -354,18 +355,17 @@ export const insertLikeSchema = createInsertSchema(likes).omit({ id: true });
 export type InsertLike = z.infer<typeof insertLikeSchema>;
 export type Like = typeof likes.$inferSelect;
 
-// Admin users table
+// Users (SaaS 帳號)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  email: text("email").notNull().default(""),
+  companyName: text("company_name").default(""),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
