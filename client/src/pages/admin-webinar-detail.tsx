@@ -136,6 +136,9 @@ export default function AdminWebinarDetail() {
   const [recurringTimes, setRecurringTimes] = useState("");
   const [recurringExcludeDates, setRecurringExcludeDates] = useState("");
 
+  // Manual session state
+  const [newSessionDate, setNewSessionDate] = useState("");
+
   // Queries
   const { data: webinar, isLoading: webinarLoading } = useQuery<Webinar>({
     queryKey: ["/api/webinars", id],
@@ -179,6 +182,11 @@ export default function AdminWebinarDetail() {
 
   const { data: analytics } = useQuery<AnalyticsResponse>({
     queryKey: ["/api/webinars", id, "analytics"],
+    enabled: !!id,
+  });
+
+  const { data: webinarSessions } = useQuery<Array<{ id: string; scheduledStart: string; status: string }>>({
+    queryKey: ["/api/webinars", id, "sessions"],
     enabled: !!id,
   });
 
@@ -1541,7 +1549,7 @@ export default function AdminWebinarDetail() {
           <TabsContent value="analytics">
             {analytics ? (
               <div className="space-y-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                   <Card>
                     <CardContent className="p-4 text-center">
                       <p className="text-2xl font-bold" data-testid="text-total-registrations">{analytics.summary?.totalRegistrations || 0}</p>
@@ -1564,6 +1572,36 @@ export default function AdminWebinarDetail() {
                     <CardContent className="p-4 text-center">
                       <p className="text-2xl font-bold" data-testid="text-avg-watch-time">{formatTime(analytics.summary?.avgWatchTime || 0)}</p>
                       <p className="text-xs text-muted-foreground">平均觀看時間</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className="text-2xl font-bold" data-testid="text-completion-rate">
+                        {(() => {
+                          const dur = analytics.summary?.videoDuration || 0;
+                          if (!dur) return "0%";
+                          const attended = analytics.registrations?.filter(r => r.attended) || [];
+                          if (attended.length === 0) return "0%";
+                          const completed = attended.filter(r => ((r.watchDuration || 0) / dur) >= 0.9).length;
+                          return `${Math.round((completed / attended.length) * 100)}%`;
+                        })()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">完播率</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className="text-2xl font-bold" data-testid="text-avg-completion">
+                        {(() => {
+                          const dur = analytics.summary?.videoDuration || 0;
+                          if (!dur) return "0%";
+                          const attended = analytics.registrations?.filter(r => r.attended && r.watchDuration) || [];
+                          if (attended.length === 0) return "0%";
+                          const avg = attended.reduce((s, r) => s + Math.min(100, ((r.watchDuration || 0) / dur) * 100), 0) / attended.length;
+                          return `${Math.round(avg)}%`;
+                        })()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">平均觀看比例</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -1686,29 +1724,51 @@ export default function AdminWebinarDetail() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">觀眾出席詳情</CardTitle>
+                    <CardDescription>每位觀眾的觀看時長、跳出時間及完播狀態</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ScrollArea className="h-[250px]">
+                    <ScrollArea className="h-[350px]">
                       <div className="space-y-2">
                         {analytics.registrations?.filter((r) => r.attended).length === 0 && (
                           <p className="text-center text-muted-foreground py-4">尚無出席記錄</p>
                         )}
-                        {analytics.registrations?.filter((r) => r.attended).map((reg) => {
-                          const pct = analytics.summary?.videoDuration ? Math.min(100, Math.round(((reg.watchDuration || 0) / analytics.summary.videoDuration) * 100)) : 0;
+                        {analytics.registrations
+                          ?.filter((r) => r.attended)
+                          .sort((a, b) => (b.watchDuration || 0) - (a.watchDuration || 0))
+                          .map((reg) => {
+                          const dur = analytics.summary?.videoDuration || 0;
+                          const pct = dur ? Math.min(100, Math.round(((reg.watchDuration || 0) / dur) * 100)) : 0;
+                          const isCompleted = pct >= 90;
                           return (
-                            <div key={reg.id} className="flex items-center justify-between gap-2 p-3 bg-muted rounded-md text-sm">
-                              <div className="flex-1 min-w-0">
-                                <span className="font-medium">{reg.name}</span>
-                                {reg.phone && <span className="text-muted-foreground ml-2">{reg.phone}</span>}
-                                <span className="text-muted-foreground ml-2">{reg.email}</span>
-                              </div>
-                              <div className="flex items-center gap-3 shrink-0">
-                                <div className="w-20 bg-background rounded-full h-2">
-                                  <div className="bg-primary h-2 rounded-full" style={{ width: `${pct}%` }} />
+                            <div key={reg.id} className="p-3 bg-muted rounded-md text-sm space-y-2" data-testid={`viewer-detail-${reg.id}`}>
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-medium">{reg.name}</span>
+                                  {reg.phone && <span className="text-muted-foreground ml-2">{reg.phone}</span>}
+                                  <span className="text-muted-foreground ml-2">{reg.email}</span>
                                 </div>
-                                <span className="text-muted-foreground w-16 text-right">
-                                  {formatTime(reg.watchDuration || 0)}
+                                <Badge variant={isCompleted ? "default" : "secondary"}>
+                                  {isCompleted ? "已完播" : `觀看 ${pct}%`}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 bg-background rounded-full h-2">
+                                  <div className={`h-2 rounded-full ${isCompleted ? "bg-green-500" : "bg-primary"}`} style={{ width: `${pct}%` }} />
+                                </div>
+                                <span className="text-muted-foreground text-xs w-24 text-right shrink-0">
+                                  {formatTime(reg.watchDuration || 0)}{dur ? ` / ${formatTime(dur)}` : ""}
                                 </span>
+                              </div>
+                              <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                                {reg.attendedAt && (
+                                  <span>進入: {new Date(reg.attendedAt).toLocaleString("zh-TW", { hour: "2-digit", minute: "2-digit" })}</span>
+                                )}
+                                {reg.leftAt && (
+                                  <span>離開: {new Date(reg.leftAt).toLocaleString("zh-TW", { hour: "2-digit", minute: "2-digit" })}</span>
+                                )}
+                                {!isCompleted && dur > 0 && (
+                                  <span>跳出於影片 {formatTime(reg.watchDuration || 0)} 處 ({pct}%)</span>
+                                )}
                               </div>
                             </div>
                           );
@@ -2187,6 +2247,88 @@ export default function AdminWebinarDetail() {
                     {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                     儲存郵件設定
                   </Button>
+                </CardContent>
+              </Card>
+
+              {/* Manual Session Management */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    場次管理
+                  </CardTitle>
+                  <CardDescription>新增直播場次讓觀眾在報名時自行選擇</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Input
+                      type="datetime-local"
+                      value={newSessionDate}
+                      onChange={(e) => setNewSessionDate(e.target.value)}
+                      data-testid="input-new-session-date"
+                    />
+                    <Button
+                      onClick={async () => {
+                        if (!newSessionDate) return;
+                        try {
+                          await apiRequest("POST", `/api/webinars/${id}/sessions`, {
+                            scheduledStart: new Date(newSessionDate).toISOString(),
+                          });
+                          queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
+                          setNewSessionDate("");
+                          toast({ title: "場次已新增" });
+                        } catch (err: any) {
+                          toast({ title: "新增失敗", description: err.message, variant: "destructive" });
+                        }
+                      }}
+                      disabled={!newSessionDate}
+                      data-testid="button-add-session"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      新增場次
+                    </Button>
+                  </div>
+
+                  {webinarSessions && webinarSessions.length > 0 ? (
+                    <div className="space-y-2">
+                      {webinarSessions.map((session) => (
+                        <div key={session.id} className="flex items-center justify-between gap-2 p-3 bg-muted rounded-md">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm">
+                              {new Date(session.scheduledStart).toLocaleString("zh-TW", {
+                                year: "numeric", month: "2-digit", day: "2-digit",
+                                hour: "2-digit", minute: "2-digit",
+                              })}
+                            </span>
+                            <Badge variant={
+                              new Date(session.scheduledStart) > new Date() ? "default" : "secondary"
+                            }>
+                              {new Date(session.scheduledStart) > new Date() ? "即將到來" : "已過期"}
+                            </Badge>
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={async () => {
+                              try {
+                                await apiRequest("DELETE", `/api/webinars/${id}/sessions/${session.id}`);
+                                queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "sessions"] });
+                                toast({ title: "場次已刪除" });
+                              } catch (err: any) {
+                                toast({ title: "刪除失敗", description: err.message, variant: "destructive" });
+                              }
+                            }}
+                            data-testid={`button-delete-session-${session.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-2">尚未新增場次，觀眾將無法選擇時段</p>
+                  )}
                 </CardContent>
               </Card>
 

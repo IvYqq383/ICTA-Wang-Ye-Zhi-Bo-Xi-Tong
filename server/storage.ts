@@ -114,6 +114,7 @@ export interface IStorage {
   getWebinarSessions(webinarId: string): Promise<WebinarSession[]>;
   getUpcomingSessions(webinarId: string): Promise<WebinarSession[]>;
   updateWebinarSession(id: string, data: Partial<WebinarSession>): Promise<void>;
+  deleteWebinarSession(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -481,6 +482,10 @@ export class DatabaseStorage implements IStorage {
 
   async updateWebinarSession(id: string, data: Partial<WebinarSession>): Promise<void> {
     await db.update(webinarSessions).set(data).where(eq(webinarSessions.id, id));
+  }
+
+  async deleteWebinarSession(id: string): Promise<void> {
+    await db.delete(webinarSessions).where(eq(webinarSessions.id, id));
   }
 }
 

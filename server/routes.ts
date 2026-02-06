@@ -836,18 +836,32 @@ export async function registerRoutes(
 
   // ============ Webinar Sessions Routes ============
   app.get("/api/webinars/:id/sessions", async (req, res) => {
-    const sessions = await storage.getUpcomingSessions(req.params.id);
+    const sessions = await storage.getWebinarSessions(req.params.id as string);
     res.json(sessions);
   });
 
   app.post("/api/webinars/:id/sessions", requireAdmin, async (req, res) => {
     try {
-      const data = insertWebinarSessionSchema.parse({
+      const body = {
         ...req.body,
-        webinarId: req.params.id
-      });
+        webinarId: req.params.id,
+        scheduledStart: new Date(req.body.scheduledStart),
+      };
+      if (req.body.scheduledEnd) {
+        body.scheduledEnd = new Date(req.body.scheduledEnd);
+      }
+      const data = insertWebinarSessionSchema.parse(body);
       const session = await storage.createWebinarSession(data);
       res.json(session);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/webinars/:id/sessions/:sessionId", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteWebinarSession(req.params.sessionId);
+      res.json({ success: true });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
