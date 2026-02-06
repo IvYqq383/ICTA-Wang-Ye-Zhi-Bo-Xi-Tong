@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
@@ -7,18 +7,26 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
-  Plus, Video, Users, Calendar, Settings, Play, 
-  ExternalLink, Loader2, LogOut, Radio, Copy
+  Plus, Video, Calendar, 
+  ExternalLink, Loader2, LogOut, Radio, Copy,
+  BarChart3, Users, Pencil, Share2, MessageCircle,
+  Eye, Code
 } from "lucide-react";
 import type { Webinar } from "@shared/schema";
+
+type WebinarStats = Record<string, {
+  registered: number;
+  attended: number;
+  engaged: number;
+  onlineCount: number;
+}>;
 
 const webinarSchema = z.object({
   title: z.string().min(1, "請輸入標題"),
@@ -37,6 +45,11 @@ export default function AdminDashboard() {
 
   const { data: webinars, isLoading } = useQuery<Webinar[]>({
     queryKey: ["/api/webinars"],
+  });
+
+  const { data: stats } = useQuery<WebinarStats>({
+    queryKey: ["/api/webinars", "stats", "summary"],
+    refetchInterval: 15000,
   });
 
   const form = useForm<WebinarForm>({
@@ -104,11 +117,11 @@ export default function AdminDashboard() {
     const end = new Date(start.getTime() + duration * 1000);
 
     if (now >= start && now <= end) {
-      return <Badge className="bg-red-500">直播中</Badge>;
+      return <Badge className="bg-red-500 text-white" data-testid={`badge-status-${webinar.id}`}>直播中</Badge>;
     } else if (now > end) {
-      return <Badge variant="secondary">已結束</Badge>;
+      return <Badge variant="secondary" data-testid={`badge-status-${webinar.id}`}>已結束</Badge>;
     } else {
-      return <Badge variant="outline">即將開始</Badge>;
+      return <Badge variant="outline" data-testid={`badge-status-${webinar.id}`}>即將開始</Badge>;
     }
   };
 
@@ -122,11 +135,26 @@ export default function AdminDashboard() {
     });
   };
 
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return "";
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}h ${m}m ${s}s`;
+    return `${m}m ${s}s`;
+  };
+
+  const handleShare = (webinar: Webinar) => {
+    const baseUrl = window.location.origin;
+    const registerUrl = `${baseUrl}/register/${webinar.id}`;
+    navigator.clipboard.writeText(registerUrl);
+    toast({ title: "已複製連結", description: "報名頁連結已複製到剪貼簿" });
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+      <header className="border-b bg-card sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Video className="h-6 w-6 text-primary" />
             <h1 className="text-xl font-bold">LiveCast 管理後台</h1>
@@ -138,9 +166,8 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
           <div>
             <h2 className="text-2xl font-bold">直播間管理</h2>
             <p className="text-muted-foreground">建立和管理您的線上研討會</p>
@@ -250,67 +277,181 @@ export default function AdminDashboard() {
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : webinars && webinars.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {webinars.map((webinar) => (
-              <Card key={webinar.id} className="hover-elevate cursor-pointer" onClick={() => setLocation(`/admin/webinar/${webinar.id}`)}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-lg line-clamp-2">{webinar.title}</CardTitle>
-                    {getStatusBadge(webinar)}
-                  </div>
-                  {webinar.description && (
-                    <CardDescription className="line-clamp-2">{webinar.description}</CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
-                      <span>{formatDate(webinar.startTime)}</span>
+          <div className="space-y-4">
+            {webinars.map((webinar) => {
+              const webinarStats = stats?.[webinar.id];
+              const onlineCount = webinarStats?.onlineCount || 0;
+              return (
+                <Card key={webinar.id} data-testid={`card-webinar-${webinar.id}`}>
+                  <CardContent className="p-0">
+                    <div className="flex flex-col md:flex-row">
+                      {/* Cover Image / Thumbnail */}
+                      <div 
+                        className="w-full md:w-48 lg:w-56 h-32 md:h-auto flex-shrink-0 bg-muted relative cursor-pointer rounded-t-lg md:rounded-t-none md:rounded-l-lg overflow-hidden"
+                        onClick={() => setLocation(`/admin/webinar/${webinar.id}`)}
+                        data-testid={`link-webinar-detail-${webinar.id}`}
+                      >
+                        {webinar.coverImage ? (
+                          <img 
+                            src={webinar.coverImage} 
+                            alt={webinar.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+                            <Video className="h-10 w-10 text-muted-foreground/50" />
+                          </div>
+                        )}
+                        {onlineCount > 0 && (
+                          <div className="absolute top-2 left-2 flex items-center gap-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full" data-testid={`badge-online-${webinar.id}`}>
+                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                            {onlineCount} 人在線
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Middle: Info + Stats */}
+                      <div className="flex-1 p-4 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <h3 
+                              className="font-semibold text-base truncate cursor-pointer hover:text-primary transition-colors"
+                              onClick={() => setLocation(`/admin/webinar/${webinar.id}`)}
+                              data-testid={`text-webinar-title-${webinar.id}`}
+                            >
+                              {webinar.title}
+                            </h3>
+                            {getStatusBadge(webinar)}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3 flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {formatDate(webinar.startTime)}
+                          </span>
+                          {webinar.videoDuration && webinar.videoDuration > 0 && (
+                            <span>{formatDuration(webinar.videoDuration)}</span>
+                          )}
+                        </div>
+
+                        {webinar.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-1 mb-3">{webinar.description}</p>
+                        )}
+
+                        {/* Stats Row */}
+                        <div className="flex items-center gap-6 flex-wrap">
+                          <div className="text-center" data-testid={`stat-registered-${webinar.id}`}>
+                            <div className="text-xl font-bold">{webinarStats?.registered ?? "—"}</div>
+                            <div className="text-xs text-muted-foreground">報名數</div>
+                          </div>
+                          <div className="text-center" data-testid={`stat-attended-${webinar.id}`}>
+                            <div className="text-xl font-bold">{webinarStats?.attended ?? "—"}</div>
+                            <div className="text-xs text-muted-foreground">出席數</div>
+                          </div>
+                          <div className="text-center" data-testid={`stat-engaged-${webinar.id}`}>
+                            <div className="text-xl font-bold">{webinarStats?.engaged !== undefined ? `${webinarStats.engaged}%` : "—"}</div>
+                            <div className="text-xs text-muted-foreground">互動率</div>
+                          </div>
+                          {onlineCount > 0 && (
+                            <div className="text-center">
+                              <div className="text-xl font-bold text-red-500">{onlineCount}</div>
+                              <div className="text-xs text-muted-foreground">在線觀眾</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: Quick Actions */}
+                      <div className="flex md:flex-col items-center md:items-stretch gap-1 p-3 md:border-l border-t md:border-t-0 flex-wrap justify-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start gap-2 text-xs"
+                          onClick={() => setLocation(`/admin/webinar/${webinar.id}`)}
+                          data-testid={`button-analytics-${webinar.id}`}
+                        >
+                          <BarChart3 className="h-3.5 w-3.5" />
+                          <span className="hidden md:inline">統計分析</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start gap-2 text-xs"
+                          onClick={() => {
+                            setLocation(`/admin/webinar/${webinar.id}`);
+                          }}
+                          data-testid={`button-registrants-${webinar.id}`}
+                        >
+                          <Users className="h-3.5 w-3.5" />
+                          <span className="hidden md:inline">報名列表</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start gap-2 text-xs"
+                          onClick={() => setLocation(`/admin/webinar/${webinar.id}`)}
+                          data-testid={`button-edit-${webinar.id}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          <span className="hidden md:inline">編輯</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start gap-2 text-xs"
+                          onClick={() => setLocation(`/admin/webinar/${webinar.id}/control`)}
+                          data-testid={`button-control-${webinar.id}`}
+                        >
+                          <Radio className="h-3.5 w-3.5" />
+                          <span className="hidden md:inline">控制台</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start gap-2 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShare(webinar);
+                          }}
+                          data-testid={`button-share-${webinar.id}`}
+                        >
+                          <Share2 className="h-3.5 w-3.5" />
+                          <span className="hidden md:inline">分享</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start gap-2 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            duplicateMutation.mutate(webinar.id);
+                          }}
+                          disabled={duplicateMutation.isPending}
+                          data-testid={`button-duplicate-${webinar.id}`}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          <span className="hidden md:inline">複製</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start gap-2 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`/register/${webinar.id}`, "_blank");
+                          }}
+                          data-testid={`button-view-registration-${webinar.id}`}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          <span className="hidden md:inline">報名頁</span>
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 mt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open(`/register/${webinar.id}`, "_blank");
-                      }}
-                      data-testid={`button-view-registration-${webinar.id}`}
-                    >
-                      <ExternalLink className="h-3 w-3 mr-1" />
-                      報名頁
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLocation(`/admin/webinar/${webinar.id}/control`);
-                      }}
-                      data-testid={`button-control-${webinar.id}`}
-                    >
-                      <Radio className="h-3 w-3 mr-1" />
-                      控制台
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        duplicateMutation.mutate(webinar.id);
-                      }}
-                      disabled={duplicateMutation.isPending}
-                      data-testid={`button-duplicate-${webinar.id}`}
-                    >
-                      <Copy className="h-3 w-3 mr-1" />
-                      複製
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         ) : (
           <Card>

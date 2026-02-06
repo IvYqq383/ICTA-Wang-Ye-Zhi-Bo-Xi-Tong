@@ -377,6 +377,34 @@ export async function registerRoutes(
     res.json(webinars);
   });
 
+  app.get("/api/webinars/stats/summary", requireAdmin, async (req, res) => {
+    try {
+      const allWebinars = await storage.getAllWebinars();
+      const stats: Record<string, { registered: number; attended: number; engaged: number; onlineCount: number }> = {};
+      
+      for (const webinar of allWebinars) {
+        const regs = await storage.getRegistrationsByWebinar(webinar.id);
+        const registered = regs.length;
+        const attended = regs.filter(r => r.attended).length;
+        
+        const chatMsgs = await storage.getChatMessagesByWebinar(webinar.id);
+        const viewerChatCount = chatMsgs.filter(m => m.senderType === "viewer").length;
+        const likeData = await storage.getLikes(webinar.id);
+        const likeCount = likeData?.count || 0;
+        const interactionCount = viewerChatCount + likeCount;
+        const engaged = attended > 0 ? Math.round((interactionCount / attended) * 100) : (registered > 0 ? Math.round((attended / registered) * 100) : 0);
+        
+        const onlineCount = webinarSessions.get(webinar.id)?.size || 0;
+        
+        stats[webinar.id] = { registered, attended, engaged, onlineCount };
+      }
+      
+      res.json(stats);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/webinars/:id", async (req, res) => {
     const webinar = await storage.getWebinar(req.params.id);
     if (!webinar) {
