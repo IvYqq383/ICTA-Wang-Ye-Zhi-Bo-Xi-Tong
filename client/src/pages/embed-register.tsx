@@ -69,16 +69,25 @@ export default function EmbedRegister() {
   });
 
   useEffect(() => {
+    let lastHeight = 0;
     const sendHeight = () => {
       try {
         const height = document.documentElement.scrollHeight;
-        window.parent.postMessage({ type: "livecast:resize", height }, "*");
+        if (height !== lastHeight) {
+          lastHeight = height;
+          window.parent.postMessage({ type: "livecast:resize", height }, "*");
+        }
       } catch {}
     };
     sendHeight();
-    const interval = setInterval(sendHeight, 500);
-    return () => clearInterval(interval);
-  }, [registered, showSessionPicker]);
+    const observer = new MutationObserver(sendHeight);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+    window.addEventListener("resize", sendHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", sendHeight);
+    };
+  }, []);
 
   const formatDate = (date: string | Date) => {
     return new Date(date).toLocaleString("zh-TW", {
@@ -169,7 +178,7 @@ export default function EmbedRegister() {
 
   return (
     <div className="p-4">
-      {brandSettings?.logo && (
+      {brandSettings?.logo && (brandSettings.logo.startsWith("http://") || brandSettings.logo.startsWith("https://") || brandSettings.logo.startsWith("/")) && (
         <div className="flex justify-center mb-3">
           <img src={brandSettings.logo} alt="Logo" className="max-h-8 object-contain" />
         </div>
