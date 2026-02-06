@@ -491,7 +491,11 @@ export async function registerRoutes(
 
   app.patch("/api/webinars/:id", requireAdmin, async (req, res) => {
     try {
-      const webinar = await storage.updateWebinar(req.params.id as string, req.body);
+      const data = { ...req.body };
+      if (data.startTime && typeof data.startTime === "string") {
+        data.startTime = new Date(data.startTime);
+      }
+      const webinar = await storage.updateWebinar(req.params.id as string, data);
       if (!webinar) {
         return res.status(404).json({ message: "Webinar not found" });
       }
