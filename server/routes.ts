@@ -62,10 +62,14 @@ export async function registerRoutes(
       res.removeHeader('X-Frame-Options');
       res.setHeader('Content-Security-Policy', "frame-ancestors *");
     }
-    // CORS only for public-facing API routes used by embeds
-    const publicCorsRoutes = ['/api/webinars', '/api/registrations'];
-    const isPublicRoute = publicCorsRoutes.some(r => req.path.startsWith(r));
-    if (isPublicRoute) {
+    const isPublicGetRoute =
+      (req.method === 'GET' || req.method === 'OPTIONS') &&
+      (req.path.match(/^\/api\/webinars\/[^/]+$/) || req.path === '/api/webinars') &&
+      !req.path.includes('/stats/');
+    const isPublicPostRoute =
+      (req.method === 'POST' || req.method === 'OPTIONS') &&
+      req.path === '/api/registrations';
+    if (isPublicGetRoute || isPublicPostRoute) {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
