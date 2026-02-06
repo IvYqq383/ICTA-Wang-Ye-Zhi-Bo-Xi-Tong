@@ -379,6 +379,18 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
+  app.patch("/api/webinars/:id", requireAdmin, async (req, res) => {
+    try {
+      const webinar = await storage.updateWebinar(req.params.id as string, req.body);
+      if (!webinar) {
+        return res.status(404).json({ message: "Webinar not found" });
+      }
+      res.json(webinar);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   // ============ Registration Routes ============
   app.post("/api/registrations", async (req, res) => {
     try {
@@ -419,6 +431,37 @@ export async function registerRoutes(
   app.get("/api/webinars/:id/registrations", requireAdmin, async (req, res) => {
     const registrations = await storage.getRegistrationsByWebinar(req.params.id as string);
     res.json(registrations);
+  });
+
+  // ============ Attendance Tracking ============
+  app.post("/api/registrations/:id/attend", async (req, res) => {
+    try {
+      const registration = await storage.updateRegistration(req.params.id, {
+        attended: true,
+        attendedAt: new Date(),
+      });
+      res.json(registration);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/registrations/:id/leave", async (req, res) => {
+    try {
+      const registration = await storage.getRegistration(req.params.id);
+      if (registration && registration.attendedAt) {
+        const watchDuration = Math.floor((Date.now() - new Date(registration.attendedAt).getTime()) / 1000);
+        const updated = await storage.updateRegistration(req.params.id, {
+          leftAt: new Date(),
+          watchDuration,
+        });
+        res.json(updated);
+      } else {
+        res.json(registration);
+      }
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
   });
 
   // ============ Fake Users Routes ============

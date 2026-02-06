@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -19,8 +19,10 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   ArrowLeft, Plus, Users, MessageSquare, MousePointerClick, 
   BarChart, Trash2, Loader2, Clock, Radio, Copy, ExternalLink,
-  Lightbulb, HelpCircle, Star, TrendingUp
+  Lightbulb, HelpCircle, Star, TrendingUp, Settings
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import type { Webinar, FakeUser, ScheduledMessage, CtaButton, Poll, Registration, Tip, Question, FeedbackSurvey } from "@shared/schema";
 
 // Analytics Response Type
@@ -91,6 +93,14 @@ export default function AdminWebinarDetail() {
   const [isCtaOpen, setIsCtaOpen] = useState(false);
   const [isPollOpen, setIsPollOpen] = useState(false);
   const [isTipOpen, setIsTipOpen] = useState(false);
+  const [answeringQuestionId, setAnsweringQuestionId] = useState<string | null>(null);
+  const [answerInput, setAnswerInput] = useState("");
+
+  const [settingsScheduleMode, setSettingsScheduleMode] = useState("fixed");
+  const [settingsJitMinutes, setSettingsJitMinutes] = useState("15");
+  const [settingsTimezone, setSettingsTimezone] = useState("Asia/Taipei");
+  const [settingsReplayEnabled, setSettingsReplayEnabled] = useState(true);
+  const [settingsReplayHours, setSettingsReplayHours] = useState("48");
 
   // Queries
   const { data: webinar, isLoading: webinarLoading } = useQuery<Webinar>({
@@ -137,6 +147,28 @@ export default function AdminWebinarDetail() {
     queryKey: ["/api/webinars", id, "analytics"],
     enabled: !!id,
   });
+
+  const { data: feedbackSurvey } = useQuery<any>({
+    queryKey: ["/api/webinars", id, "feedback-survey"],
+    enabled: !!id,
+  });
+
+  useEffect(() => {
+    if (webinar) {
+      const sm = webinar.scheduleMode as any;
+      if (sm?.justInTime) {
+        setSettingsScheduleMode("justInTime");
+        setSettingsJitMinutes(String(sm.justInTimeMinutes || 15));
+      } else if (sm?.onDemand) {
+        setSettingsScheduleMode("onDemand");
+      } else {
+        setSettingsScheduleMode("fixed");
+      }
+      setSettingsTimezone(webinar.timezone || "Asia/Taipei");
+      setSettingsReplayEnabled(webinar.replayEnabled ?? true);
+      setSettingsReplayHours(String(webinar.replayAvailableHours ?? 48));
+    }
+  }, [webinar]);
 
   // Forms
   const fakeUserForm = useForm({
@@ -251,6 +283,32 @@ export default function AdminWebinarDetail() {
     },
   });
 
+  const updateWebinar = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest("PATCH", `/api/webinars/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id] });
+      toast({ title: "設定已儲存" });
+    },
+  });
+
+  const answerQuestion = useMutation({
+    mutationFn: async ({ questionId, answer }: { questionId: string; answer: string }) => {
+      return apiRequest("PATCH", `/api/webinars/${id}/questions/${questionId}`, {
+        answer,
+        answeredBy: "admin",
+        answeredAt: new Date().toISOString(),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "questions"] });
+      setAnsweringQuestionId(null);
+      setAnswerInput("");
+      toast({ title: "已回覆問題" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async ({ type, itemId }: { type: string; itemId: string }) => {
       return apiRequest("DELETE", `/api/webinars/${id}/${type}/${itemId}`, {});
@@ -356,6 +414,10 @@ export default function AdminWebinarDetail() {
               <HelpCircle className="h-4 w-4 mr-1" />
               Q&A
             </TabsTrigger>
+            <TabsTrigger value="survey">
+              <Star className="h-4 w-4 mr-1" />
+              問卷
+            </TabsTrigger>
             <TabsTrigger value="registrations">
               <Users className="h-4 w-4 mr-1" />
               報名 ({registrations?.length || 0})
@@ -363,6 +425,10 @@ export default function AdminWebinarDetail() {
             <TabsTrigger value="analytics">
               <TrendingUp className="h-4 w-4 mr-1" />
               分析
+            </TabsTrigger>
+            <TabsTrigger value="settings" data-testid="tab-settings">
+              <Settings className="h-4 w-4 mr-1" />
+              設定
             </TabsTrigger>
           </TabsList>
 
@@ -976,13 +1042,29 @@ export default function AdminWebinarDetail() {
                   <ScrollArea className="h-[400px]">
                     <div className="space-y-2">
                       {questions.map((q) => (
-                        <div key={q.id} className="p-3 bg-muted rounded-md">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium text-sm">{q.askerName || "匿名"}</span>
-                            <div className="flex items-center gap-2">
+                        <div key={q.id} className="p-3 bg-muted rounded-md" data-testid={`qa-item-${q.id}`}>
+                          <div className="flex items-center justify-between mb-2 gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm">{q.askerName || "匿名"}</span>
                               <Badge variant={q.answer ? "secondary" : "outline"}>
                                 {q.answer ? "已回覆" : "待回覆"}
                               </Badge>
+                              {q.isPreset && <Badge variant="secondary">FAQ</Badge>}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {!q.answer && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setAnsweringQuestionId(q.id);
+                                    setAnswerInput("");
+                                  }}
+                                  data-testid={`button-answer-${q.id}`}
+                                >
+                                  回覆
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -998,12 +1080,112 @@ export default function AdminWebinarDetail() {
                               <p className="text-sm text-muted-foreground">{q.answer}</p>
                             </div>
                           )}
+                          {answeringQuestionId === q.id && (
+                            <div className="mt-2 flex gap-2">
+                              <Input
+                                placeholder="輸入回覆..."
+                                value={answerInput}
+                                onChange={(e) => setAnswerInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && answerInput.trim()) {
+                                    answerQuestion.mutate({ questionId: q.id, answer: answerInput.trim() });
+                                  }
+                                }}
+                                data-testid={`input-answer-${q.id}`}
+                              />
+                              <Button
+                                size="sm"
+                                disabled={answerQuestion.isPending || !answerInput.trim()}
+                                onClick={() => answerQuestion.mutate({ questionId: q.id, answer: answerInput.trim() })}
+                                data-testid={`button-submit-answer-${q.id}`}
+                              >
+                                送出
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setAnsweringQuestionId(null)}
+                              >
+                                取消
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
                   </ScrollArea>
                 ) : (
                   <p className="text-center text-muted-foreground py-8">尚無問題</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Survey Tab */}
+          <TabsContent value="survey">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">回饋問卷</CardTitle>
+                <CardDescription>直播結束後向觀眾收集回饋</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {feedbackSurvey ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium">{feedbackSurvey.title}</span>
+                      <Badge variant={feedbackSurvey.isActive ? "default" : "secondary"}>
+                        {feedbackSurvey.isActive ? "啟用中" : "已停用"}
+                      </Badge>
+                    </div>
+                    {feedbackSurvey.questions && (feedbackSurvey.questions as any[]).length > 0 && (
+                      <div className="space-y-2">
+                        {(feedbackSurvey.questions as any[]).map((q: any, i: number) => (
+                          <div key={q.id || i} className="p-3 bg-muted rounded-md">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline" className="text-xs">
+                                {q.type === "rating" ? "評分" : q.type === "text" ? "文字" : "選擇"}
+                              </Badge>
+                              {q.required && <Badge variant="secondary" className="text-xs">必填</Badge>}
+                            </div>
+                            <p className="text-sm">{q.question}</p>
+                            {q.options && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {q.options.map((opt: string, oi: number) => (
+                                  <Badge key={oi} variant="outline" className="text-xs">{opt}</Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground mb-4">尚未設定問卷</p>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        apiRequest("POST", `/api/webinars/${id}/feedback-survey`, {
+                          webinarId: id,
+                          title: "請給我們回饋",
+                          questions: [
+                            { id: "q1", type: "rating", question: "您對本次直播的整體評價？", required: true },
+                            { id: "q2", type: "text", question: "您最喜歡哪個部分？", required: false },
+                            { id: "q3", type: "multiChoice", question: "您會推薦給朋友嗎？", options: ["一定會", "可能會", "不確定", "不會"], required: true },
+                          ],
+                          isActive: true,
+                        }).then(() => {
+                          queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "feedback-survey"] });
+                          toast({ title: "預設問卷已建立" });
+                        });
+                      }}
+                      data-testid="button-create-default-survey"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      建立預設問卷
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -1057,6 +1239,112 @@ export default function AdminWebinarDetail() {
                 ) : (
                   <p className="text-center text-muted-foreground py-8">尚無分析數據</p>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">直播間設定</CardTitle>
+                <CardDescription>排程模式、時區與重播設定</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label>排程模式</Label>
+                  <Select value={settingsScheduleMode} onValueChange={setSettingsScheduleMode}>
+                    <SelectTrigger data-testid="select-schedule-mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fixed">固定時間</SelectItem>
+                      <SelectItem value="onDemand">隨選觀看</SelectItem>
+                      <SelectItem value="justInTime">即時開始</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {settingsScheduleMode === "justInTime" && (
+                  <div className="space-y-2">
+                    <Label>即時開始分鐘數</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={settingsJitMinutes}
+                      onChange={(e) => setSettingsJitMinutes(e.target.value)}
+                      data-testid="input-jit-minutes"
+                    />
+                    <p className="text-xs text-muted-foreground">觀眾進入後，下一場將在此分鐘數內開始</p>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>時區</Label>
+                  <Select value={settingsTimezone} onValueChange={setSettingsTimezone}>
+                    <SelectTrigger data-testid="select-timezone">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Asia/Taipei">Asia/Taipei (台北)</SelectItem>
+                      <SelectItem value="Asia/Tokyo">Asia/Tokyo (東京)</SelectItem>
+                      <SelectItem value="Asia/Shanghai">Asia/Shanghai (上海)</SelectItem>
+                      <SelectItem value="Asia/Hong_Kong">Asia/Hong_Kong (香港)</SelectItem>
+                      <SelectItem value="America/New_York">America/New_York (紐約)</SelectItem>
+                      <SelectItem value="America/Los_Angeles">America/Los_Angeles (洛杉磯)</SelectItem>
+                      <SelectItem value="Europe/London">Europe/London (倫敦)</SelectItem>
+                      <SelectItem value="Europe/Paris">Europe/Paris (巴黎)</SelectItem>
+                      <SelectItem value="Australia/Sydney">Australia/Sydney (雪梨)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>啟用重播</Label>
+                    <Switch
+                      checked={settingsReplayEnabled}
+                      onCheckedChange={setSettingsReplayEnabled}
+                      data-testid="switch-replay-enabled"
+                    />
+                  </div>
+
+                  {settingsReplayEnabled && (
+                    <div className="space-y-2">
+                      <Label>重播可用時數</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={settingsReplayHours}
+                        onChange={(e) => setSettingsReplayHours(e.target.value)}
+                        data-testid="input-replay-hours"
+                      />
+                      <p className="text-xs text-muted-foreground">直播結束後，重播影片的可用時數</p>
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  onClick={() => {
+                    const scheduleMode = {
+                      recurring: false,
+                      onDemand: settingsScheduleMode === "onDemand",
+                      justInTime: settingsScheduleMode === "justInTime",
+                      justInTimeMinutes: settingsScheduleMode === "justInTime" ? parseInt(settingsJitMinutes) || 15 : 15,
+                    };
+                    updateWebinar.mutate({
+                      scheduleMode,
+                      timezone: settingsTimezone,
+                      replayEnabled: settingsReplayEnabled,
+                      replayAvailableHours: parseInt(settingsReplayHours) || 48,
+                    });
+                  }}
+                  disabled={updateWebinar.isPending}
+                  data-testid="button-save-settings"
+                >
+                  {updateWebinar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  儲存設定
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
