@@ -1139,6 +1139,7 @@ export default function AdminWebinarDetail() {
                         <div key={reg.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
                           <div>
                             <p className="font-medium">{reg.name}</p>
+                            {reg.phone && <p className="text-sm text-muted-foreground">{reg.phone}</p>}
                             <p className="text-sm text-muted-foreground">{reg.email}</p>
                           </div>
                           <div className="text-right">
@@ -1698,6 +1699,7 @@ export default function AdminWebinarDetail() {
                             <div key={reg.id} className="flex items-center justify-between gap-2 p-3 bg-muted rounded-md text-sm">
                               <div className="flex-1 min-w-0">
                                 <span className="font-medium">{reg.name}</span>
+                                {reg.phone && <span className="text-muted-foreground ml-2">{reg.phone}</span>}
                                 <span className="text-muted-foreground ml-2">{reg.email}</span>
                               </div>
                               <div className="flex items-center gap-3 shrink-0">

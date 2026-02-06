@@ -21,6 +21,7 @@ interface AvailableSessionsResponse {
 
 const registrationSchema = z.object({
   name: z.string().min(2, "姓名至少需要2個字"),
+  phone: z.string().min(1, "請輸入電話號碼"),
   email: z.string().email("請輸入有效的 Email"),
 });
 
@@ -45,7 +46,7 @@ export default function EmbedRegister() {
 
   const form = useForm<RegistrationForm>({
     resolver: zodResolver(registrationSchema),
-    defaultValues: { name: "", email: "" },
+    defaultValues: { name: "", phone: "", email: "" },
   });
 
   const registerMutation = useMutation({
@@ -292,6 +293,19 @@ export default function EmbedRegister() {
                 <FormLabel className="text-xs">姓名</FormLabel>
                 <FormControl>
                   <Input placeholder="請輸入您的姓名" {...field} data-testid="input-embed-name" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs">電話</FormLabel>
+                <FormControl>
+                  <Input type="tel" placeholder="請輸入您的電話號碼" {...field} data-testid="input-embed-phone" />
                 </FormControl>
                 <FormMessage />
               </FormItem>

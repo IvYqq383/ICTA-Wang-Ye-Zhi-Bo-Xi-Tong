@@ -24,6 +24,7 @@ interface AvailableSessionsResponse {
 
 const registrationSchema = z.object({
   name: z.string().min(2, "姓名至少需要2個字"),
+  phone: z.string().min(1, "請輸入電話號碼"),
   email: z.string().email("請輸入有效的 Email"),
 });
 
@@ -50,6 +51,7 @@ export default function Registration() {
     resolver: zodResolver(registrationSchema),
     defaultValues: {
       name: "",
+      phone: "",
       email: "",
     },
   });
@@ -284,6 +286,25 @@ export default function Registration() {
                         placeholder="請輸入您的姓名"
                         {...field}
                         data-testid="input-name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>電話</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="tel"
+                        placeholder="請輸入您的電話號碼"
+                        {...field}
+                        data-testid="input-phone"
                       />
                     </FormControl>
                     <FormMessage />

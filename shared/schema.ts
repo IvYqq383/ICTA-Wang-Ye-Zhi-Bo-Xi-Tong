@@ -77,6 +77,7 @@ export const registrations = pgTable("registrations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   name: text("name").notNull(),
+  phone: text("phone").default(""),
   email: text("email").notNull(),
   nickname: text("nickname"),
   registeredAt: timestamp("registered_at").defaultNow(),
