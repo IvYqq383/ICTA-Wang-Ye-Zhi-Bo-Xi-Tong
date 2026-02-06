@@ -1751,6 +1751,52 @@ export default function AdminWebinarDetail() {
                   </div>
                 </CardContent>
               </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">內嵌報名元件（Inline Widget）</CardTitle>
+                  <CardDescription>直接嵌入到其他網頁中，訪客可以選擇時段並報名，無需彈出視窗</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium mb-2">步驟 1：加入 Script 標籤（放在 &lt;/body&gt; 前）</p>
+                    <div className="relative">
+                      <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all" data-testid="text-embed-inline-script">{`<script src="${window.location.origin}/livecast-widget.js"></script>`}</pre>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`<script src="${window.location.origin}/livecast-widget.js"></script>`);
+                          toast({ title: "已複製 Script 代碼" });
+                        }}
+                        data-testid="button-copy-inline-script"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium mb-2">步驟 2：在頁面中放入容器元素</p>
+                    <div className="relative">
+                      <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all" data-testid="text-embed-inline-div">{`<div data-livecast-inline-register="${id}"></div>`}</pre>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`<div data-livecast-inline-register="${id}"></div>`);
+                          toast({ title: "已複製內嵌代碼" });
+                        }}
+                        data-testid="button-copy-inline-div"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">報名表單會自動嵌入到該容器中，支援時段選擇、品牌設定，並且會自動調整高度。</p>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
 
