@@ -357,11 +357,17 @@ export default function AdminWebinarDetail() {
 
   const updateWebinar = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("PATCH", `/api/webinars/${id}`, data);
+      const res = await apiRequest("PATCH", `/api/webinars/${id}`, data);
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/webinars", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars"] });
+      setIsEditingInfo(false);
       toast({ title: "設定已儲存" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "儲存失敗", description: error.message, variant: "destructive" });
     },
   });
 
@@ -479,7 +485,6 @@ export default function AdminWebinarDetail() {
                         startTime: new Date(editStartTime).toISOString(),
                         coverImage: editCoverImage || null,
                       });
-                      setIsEditingInfo(false);
                     }}
                     disabled={updateWebinar.isPending || !editTitle || !editVimeoUrl}
                     data-testid="button-save-info"
