@@ -512,7 +512,11 @@ export async function registerRoutes(
   // ============ Registration Routes ============
   app.post("/api/registrations", async (req, res) => {
     try {
-      const data = insertRegistrationSchema.parse(req.body);
+      const body = { ...req.body };
+      if (body.selectedSession && typeof body.selectedSession === "string") {
+        body.selectedSession = new Date(body.selectedSession);
+      }
+      const data = insertRegistrationSchema.parse(body);
       
       // Check if already registered
       const existing = await storage.getRegistrationByEmail(data.webinarId, data.email);
@@ -997,23 +1001,32 @@ export async function registerRoutes(
         });
       }
 
-      // Fixed mode - check for manually added sessions
+      const isRecurring = scheduleMode?.recurring && !scheduleMode?.onDemand && !scheduleMode?.justInTime;
+      const mode = isRecurring ? "recurring" : "fixed";
+
       const allSessions = await storage.getWebinarSessions(webinar.id);
+      const seenTimes = new Set<number>();
       const futureSessions = allSessions
         .filter(s => new Date(s.scheduledStart) > now && s.status === "scheduled")
         .sort((a, b) => new Date(a.scheduledStart).getTime() - new Date(b.scheduledStart).getTime())
+        .filter(s => {
+          const t = new Date(s.scheduledStart).getTime();
+          if (seenTimes.has(t)) return false;
+          seenTimes.add(t);
+          return true;
+        })
         .slice(0, 20);
 
       if (futureSessions.length > 0) {
         return res.json({
-          mode: "fixed",
+          mode,
           sessions: futureSessions,
           hasSessions: true,
         });
       }
 
       return res.json({
-        mode: "fixed",
+        mode,
         sessions: [{ id: "main", scheduledStart: webinar.startTime, status: "scheduled" }],
         hasSessions: false,
       });
@@ -1039,6 +1052,11 @@ export async function registerRoutes(
       const now = new Date();
       const sessions: any[] = [];
 
+      const existingSessions = await storage.getWebinarSessions(webinar.id);
+      const existingKeys = new Set(
+        existingSessions.map(s => `${new Date(s.scheduledStart).getTime()}`)
+      );
+
       for (let d = 0; d < daysToGenerate; d++) {
         const date = new Date(now);
         date.setDate(date.getDate() + d);
@@ -1056,12 +1074,16 @@ export async function registerRoutes(
 
           if (sessionDate <= now) continue;
 
+          const key = `${sessionDate.getTime()}`;
+          if (existingKeys.has(key)) continue;
+
           const session = await storage.createWebinarSession({
             webinarId: webinar.id,
             scheduledStart: sessionDate,
             status: "scheduled",
           });
           sessions.push(session);
+          existingKeys.add(key);
         }
       }
 
