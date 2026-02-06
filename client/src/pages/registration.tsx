@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Calendar, Clock, CheckCircle, Loader2, Play, Zap } from "lucide-react";
@@ -101,19 +100,16 @@ export default function Registration() {
     });
   };
 
-  const formatShortDate = (date: string | Date) => {
-    return new Date(date).toLocaleString("zh-TW", {
-      month: "short",
-      day: "numeric",
-      weekday: "short",
-    });
-  };
-
-  const formatTime = (date: string | Date) => {
-    return new Date(date).toLocaleString("zh-TW", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const formatSessionOption = (date: string | Date) => {
+    const d = new Date(date);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+    const weekday = weekdays[d.getDay()];
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${yyyy}/${mm}/${dd} 星期${weekday} ${hh}:${min}`;
   };
 
   if (isLoading) {
@@ -190,15 +186,6 @@ export default function Registration() {
     );
   }
 
-  const groupedSessions: Record<string, Array<{ id: string; scheduledStart: string; status: string }>> = {};
-  if (availableSessions?.sessions) {
-    for (const session of availableSessions.sessions) {
-      const dateKey = formatShortDate(session.scheduledStart);
-      if (!groupedSessions[dateKey]) groupedSessions[dateKey] = [];
-      groupedSessions[dateKey].push(session);
-    }
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={brandGradient}>
       <Card className="max-w-lg w-full">
@@ -250,32 +237,28 @@ export default function Registration() {
 
           {showSessionPicker && (
             <div className="mb-6">
-              <p className="text-sm font-medium mb-3 text-center">選擇您方便的時段</p>
-              <ScrollArea className="max-h-60">
-                <div className="space-y-3">
-                  {Object.entries(groupedSessions).map(([dateLabel, sessions]) => (
-                    <div key={dateLabel}>
-                      <p className="text-xs text-muted-foreground font-medium mb-1.5 px-1">{dateLabel}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {sessions.map((session) => (
-                          <Button
-                            key={session.id}
-                            size="sm"
-                            variant={selectedSession === session.scheduledStart ? "default" : "outline"}
-                            onClick={() => setSelectedSession(session.scheduledStart)}
-                            data-testid={`button-session-${session.id}`}
-                          >
-                            <Clock className="h-3 w-3 mr-1" />
-                            {formatTime(session.scheduledStart)}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
+              <label className="text-sm font-medium mb-2 block">選擇場次時間</label>
+              <Select
+                value={selectedSession || ""}
+                onValueChange={(val) => setSelectedSession(val)}
+              >
+                <SelectTrigger data-testid="select-session" className="w-full">
+                  <SelectValue placeholder="請選擇場次時段" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableSessions?.sessions.map((session) => (
+                    <SelectItem
+                      key={session.id}
+                      value={session.scheduledStart}
+                      data-testid={`option-session-${session.id}`}
+                    >
+                      {formatSessionOption(session.scheduledStart)}
+                    </SelectItem>
                   ))}
-                </div>
-              </ScrollArea>
+                </SelectContent>
+              </Select>
               {!selectedSession && (
-                <p className="text-xs text-destructive mt-2 text-center">請先選擇一個時段</p>
+                <p className="text-xs text-destructive mt-2">請先選擇一個時段</p>
               )}
             </div>
           )}
