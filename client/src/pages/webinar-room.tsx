@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Heart, Send, Users, Loader2, ExternalLink, X, Info, HelpCircle, MessageSquare, Star, Clock } from "lucide-react";
-import type { Webinar, ChatMessage, CtaButton, Poll, ScheduledMessage, Tip, FakeUser, Question, FeedbackSurvey } from "@shared/schema";
+import { Heart, Send, Users, Loader2, ExternalLink, X, Info, Star, Clock } from "lucide-react";
+import type { Webinar, ChatMessage, CtaButton, Poll, ScheduledMessage, Tip, FakeUser, FeedbackSurvey } from "@shared/schema";
 
 interface WebSocketMessage {
   type: string;
@@ -67,9 +67,8 @@ export default function WebinarRoom() {
   const [visibleTip, setVisibleTip] = useState<Tip | null>(null);
   const shownTipsRef = useRef<Set<string>>(new Set());
 
-  const [activePanel, setActivePanel] = useState<string>("chat");
-  
-  const [questionInput, setQuestionInput] = useState("");
+  const [floatingHearts, setFloatingHearts] = useState<{ id: number; x: number }[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
   
   const [showSurvey, setShowSurvey] = useState(false);
   const [surveyResponses, setSurveyResponses] = useState<Record<string, any>>({});
@@ -105,11 +104,6 @@ export default function WebinarRoom() {
     enabled: !!id && isJoined,
   });
 
-  const { data: presetQuestions } = useQuery<Question[]>({
-    queryKey: ["/api/webinars", id, "questions", "preset"],
-    enabled: !!id && isJoined,
-  });
-
   const { data: feedbackSurvey } = useQuery<FeedbackSurvey>({
     queryKey: ["/api/webinars", id, "feedback-survey"],
     enabled: !!id && isJoined,
@@ -118,16 +112,6 @@ export default function WebinarRoom() {
   const { data: savedProgress } = useQuery<{ lastPosition: number; totalWatched: number }>({
     queryKey: ["/api/webinars", id, "progress", sessionId],
     enabled: !!id && isJoined,
-  });
-
-  const submitQuestionMutation = useMutation({
-    mutationFn: async (data: { question: string; askerName: string }) => {
-      return apiRequest("POST", `/api/webinars/${id}/questions`, data);
-    },
-    onSuccess: () => {
-      setQuestionInput("");
-      toast({ title: "問題已送出" });
-    },
   });
 
   const submitSurveyMutation = useMutation({
@@ -316,6 +300,7 @@ export default function WebinarRoom() {
           setTimeout(() => setShowLikeAnimation(false), 300);
           break;
         case "viewerCount":
+          setViewerCount(msg.data.count);
           break;
         case "poll":
           setActivePoll(msg.data);
@@ -382,6 +367,7 @@ export default function WebinarRoom() {
       }
     }));
     setMessageInput("");
+    setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   const sendLike = () => {
@@ -390,6 +376,12 @@ export default function WebinarRoom() {
       type: "like",
       data: { webinarId: id, sessionId }
     }));
+    const heartId = Date.now();
+    const x = 20 + Math.random() * 60;
+    setFloatingHearts(prev => [...prev, { id: heartId, x }]);
+    setTimeout(() => {
+      setFloatingHearts(prev => prev.filter(h => h.id !== heartId));
+    }, 1500);
   };
 
   const submitVote = () => {
@@ -403,14 +395,6 @@ export default function WebinarRoom() {
       }
     }));
     setHasVoted(true);
-  };
-
-  const submitQuestion = () => {
-    if (!questionInput.trim()) return;
-    submitQuestionMutation.mutate({
-      question: questionInput.trim(),
-      askerName: nickname,
-    });
   };
 
   const handleSurveySubmit = () => {
@@ -572,10 +556,10 @@ export default function WebinarRoom() {
               </div>
             )}
 
-            <div className="absolute top-4 left-4 z-10">
-              <Badge variant="secondary" className="bg-black/50 text-white border-0">
-                <Users className="w-3 h-3 mr-1" />
-                {viewerCount} 人觀看
+            <div className="absolute top-3 left-3 z-10">
+              <Badge variant="secondary" className="bg-black/60 text-white border-0 backdrop-blur-sm">
+                <div className="w-2 h-2 rounded-full bg-red-500 mr-1.5 animate-pulse" />
+                LIVE
               </Badge>
             </div>
             
@@ -620,122 +604,139 @@ export default function WebinarRoom() {
           </div>
         </div>
 
-        <div className="w-full lg:w-96 flex flex-col border-l bg-card h-[45vh] sm:h-[50vh] lg:h-full">
-          <Tabs value={activePanel} onValueChange={setActivePanel} className="flex flex-col h-full">
-            <TabsList className="w-full rounded-none border-b h-auto p-0">
-              <TabsTrigger value="chat" className="flex-1 rounded-none py-3 data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary" data-testid="tab-chat">
-                <MessageSquare className="w-4 h-4 mr-1" />
-                聊天
-              </TabsTrigger>
-              <TabsTrigger value="qa" className="flex-1 rounded-none py-3 data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary" data-testid="tab-qa">
-                <HelpCircle className="w-4 h-4 mr-1" />
-                問答
-              </TabsTrigger>
-            </TabsList>
+        <div className="w-full lg:w-[380px] flex flex-col border-l bg-background h-[45vh] sm:h-[50vh] lg:h-full relative">
+          <div className="px-4 py-3 border-b flex items-center justify-between gap-2 bg-card">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm">即時聊天</span>
+              <Badge variant="secondary" className="text-[10px]">
+                <Users className="w-3 h-3 mr-1" />
+                {viewerCount}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={sendLike}
+                className="gap-1.5 relative"
+                data-testid="button-like"
+              >
+                <Heart className={`w-4 h-4 transition-colors duration-200 ${showLikeAnimation ? "fill-red-500 text-red-500" : likeCount > 0 ? "fill-red-500 text-red-500" : ""}`} />
+                <span className="text-xs font-medium tabular-nums">{likeCount}</span>
+              </Button>
+            </div>
+          </div>
 
-            <TabsContent value="chat" className="flex-1 flex flex-col m-0 overflow-hidden">
-              <div className="p-3 border-b flex items-center justify-between">
-                <h3 className="font-semibold text-sm">即時聊天</h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={sendLike}
-                  className={`gap-1 ${showLikeAnimation ? "scale-125" : ""} transition-transform`}
-                  data-testid="button-like"
+          {floatingHearts.length > 0 && (
+            <div className="absolute bottom-20 right-4 w-12 h-32 pointer-events-none z-30">
+              {floatingHearts.map((heart) => (
+                <div
+                  key={heart.id}
+                  className="absolute animate-float-up"
+                  style={{ left: `${heart.x}%` }}
                 >
-                  <Heart className={`w-4 h-4 ${likeCount > 0 ? "fill-red-500 text-red-500" : ""}`} />
-                  <span>{likeCount}</span>
-                </Button>
-              </div>
+                  <Heart className="w-5 h-5 fill-red-500 text-red-500 opacity-80" />
+                </div>
+              ))}
+            </div>
+          )}
 
-              <ScrollArea className="flex-1 p-3">
-                <div className="space-y-2">
-                  {messages.map((msg, index) => (
-                    <div key={msg.id || index} className="flex gap-2" data-testid={`chat-message-${index}`}>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <span className={`text-xs font-medium ${
-                            msg.senderType === "host" 
-                              ? "text-red-500" 
-                              : msg.senderType === "scheduled" 
-                              ? "text-blue-500" 
-                              : "text-foreground"
-                          }`}>
-                            {msg.senderName}
-                            {msg.senderType === "host" && (
-                              <Badge variant="destructive" className="ml-1 text-[10px] px-1 py-0">主辦</Badge>
-                            )}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{msg.message}</p>
+          <ScrollArea className="flex-1">
+            <div className="px-3 py-2 space-y-1">
+              {messages.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                    <Send className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">歡迎來到聊天室</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">在下方輸入訊息開始互動</p>
+                </div>
+              )}
+              {messages.map((msg, index) => {
+                const isMe = msg.senderName === nickname && msg.senderType === "viewer";
+                const isHost = msg.senderType === "host";
+                const isScheduled = msg.senderType === "scheduled";
+                const initial = msg.senderName?.charAt(0)?.toUpperCase() || "?";
+
+                const avatarColor = isHost
+                  ? "bg-red-500 text-white"
+                  : isScheduled
+                  ? "bg-blue-500 text-white"
+                  : isMe
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground";
+
+                return (
+                  <div
+                    key={msg.id || index}
+                    className={`flex items-start gap-2 py-1.5 group ${isMe ? "flex-row-reverse" : ""}`}
+                    data-testid={`chat-message-${index}`}
+                  >
+                    <Avatar className={`w-7 h-7 flex-shrink-0 ${avatarColor}`}>
+                      <AvatarFallback className={`text-[11px] font-semibold ${avatarColor}`}>
+                        {initial}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className={`max-w-[75%] ${isMe ? "text-right" : ""}`}>
+                      <div className={`flex items-center gap-1.5 mb-0.5 ${isMe ? "justify-end" : ""} flex-wrap`}>
+                        <span className={`text-[11px] font-semibold leading-none ${
+                          isHost ? "text-red-500" : isScheduled ? "text-blue-500" : "text-foreground"
+                        }`}>
+                          {msg.senderName}
+                        </span>
+                        {isHost && (
+                          <Badge variant="destructive" className="text-[9px] px-1 py-0 leading-tight">
+                            主辦
+                          </Badge>
+                        )}
+                      </div>
+                      <div className={`inline-block rounded-2xl px-3 py-1.5 text-sm leading-relaxed break-words ${
+                        isMe
+                          ? "bg-primary text-primary-foreground rounded-tr-sm"
+                          : isHost
+                          ? "bg-red-50 dark:bg-red-950/30 text-foreground rounded-tl-sm"
+                          : "bg-muted text-foreground rounded-tl-sm"
+                      }`}>
+                        {msg.message}
                       </div>
                     </div>
-                  ))}
-                  <div ref={chatEndRef} />
-                </div>
-              </ScrollArea>
+                  </div>
+                );
+              })}
+              <div ref={chatEndRef} />
+            </div>
+          </ScrollArea>
 
-              <div className="p-3 border-t">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="輸入訊息..."
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                    data-testid="input-chat-message"
-                  />
-                  <Button onClick={sendMessage} size="icon" data-testid="button-send-message">
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="qa" className="flex-1 flex flex-col m-0 overflow-hidden">
-              <div className="p-3 border-b">
-                <h3 className="font-semibold text-sm">問答 Q&A</h3>
-              </div>
-
-              <ScrollArea className="flex-1 p-3">
-                <div className="space-y-3">
-                  {presetQuestions && presetQuestions.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">常見問題</p>
-                      {presetQuestions.map((q) => (
-                        <Card key={q.id} className="p-3" data-testid={`qa-preset-${q.id}`}>
-                          <p className="text-sm font-medium">{q.question}</p>
-                          {q.answer && (
-                            <p className="text-sm text-muted-foreground mt-1">{q.answer}</p>
-                          )}
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-
-              <div className="p-3 border-t space-y-2">
-                <p className="text-xs text-muted-foreground">有問題想問嗎？</p>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="輸入您的問題..."
-                    value={questionInput}
-                    onChange={(e) => setQuestionInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && submitQuestion()}
-                    data-testid="input-question"
-                  />
-                  <Button
-                    onClick={submitQuestion}
-                    size="icon"
-                    disabled={submitQuestionMutation.isPending}
-                    data-testid="button-submit-question"
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
+          <div className="border-t bg-card p-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2 px-1">
+              <span className="truncate">{nickname}</span>
+            </div>
+            <div className="flex gap-2 items-center">
+              <Input
+                ref={inputRef}
+                placeholder="說些什麼..."
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                className="flex-1 rounded-full bg-muted border-0 focus-visible:ring-1 focus-visible:ring-primary"
+                data-testid="input-chat-message"
+              />
+              <Button
+                onClick={sendMessage}
+                size="icon"
+                disabled={!messageInput.trim()}
+                className="rounded-full flex-shrink-0"
+                data-testid="button-send-message"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
