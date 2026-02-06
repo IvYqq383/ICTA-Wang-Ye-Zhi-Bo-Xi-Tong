@@ -983,6 +983,7 @@ export async function registerRoutes(
         });
       }
 
+      // Fixed mode - check for manually added sessions
       const allSessions = await storage.getWebinarSessions(webinar.id);
       const futureSessions = allSessions
         .filter(s => new Date(s.scheduledStart) > now && s.status === "scheduled")
@@ -991,14 +992,16 @@ export async function registerRoutes(
 
       if (futureSessions.length > 0) {
         return res.json({
-          mode: "recurring",
+          mode: "fixed",
           sessions: futureSessions,
+          hasSessions: true,
         });
       }
 
       return res.json({
         mode: "fixed",
         sessions: [{ id: "main", scheduledStart: webinar.startTime, status: "scheduled" }],
+        hasSessions: false,
       });
     } catch (error: any) {
       res.status(500).json({ message: error.message });

@@ -20,6 +20,7 @@ interface AvailableSessionsResponse {
   sessions: Array<{ id: string; scheduledStart: string; status: string }>;
   nextStartMinutes?: number;
   message?: string;
+  hasSessions?: boolean;
 }
 
 const registrationSchema = z.object({
@@ -134,7 +135,9 @@ export default function Registration() {
     : { background: "linear-gradient(135deg, #4338ca 0%, #7e22ce 50%, #be185d 100%)" };
 
   const mode = availableSessions?.mode || "fixed";
-  const showSelectedTime = selectedSession || mode === "onDemand" || mode === "fixed";
+  const hasSessions = availableSessions?.hasSessions || false;
+  const showSessionPicker = hasSessions && availableSessions && availableSessions.sessions.length > 1;
+  const showSelectedTime = selectedSession || mode === "onDemand" || (mode === "fixed" && !showSessionPicker);
 
   if (registered) {
     return (
@@ -229,16 +232,16 @@ export default function Registration() {
             </div>
           )}
 
-          {mode === "fixed" && (
+          {mode === "fixed" && !showSessionPicker && (
             <div className="flex items-center justify-center gap-6 mb-6 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="h-4 w-4" />
-                <span>{formatDate(webinar.startTime)}</span>
+                <span>{formatDate(hasSessions && availableSessions?.sessions?.[0]?.scheduledStart ? availableSessions.sessions[0].scheduledStart : webinar.startTime)}</span>
               </div>
             </div>
           )}
 
-          {mode === "recurring" && availableSessions && availableSessions.sessions.length > 0 && (
+          {showSessionPicker && (
             <div className="mb-6">
               <p className="text-sm font-medium mb-3 text-center">選擇您方便的時段</p>
               <ScrollArea className="max-h-60">
@@ -334,7 +337,7 @@ export default function Registration() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={registerMutation.isPending || (mode === "recurring" && !selectedSession)}
+                disabled={registerMutation.isPending || (showSessionPicker && !selectedSession)}
                 data-testid="button-register"
               >
                 {registerMutation.isPending ? (

@@ -17,6 +17,7 @@ interface AvailableSessionsResponse {
   sessions: Array<{ id: string; scheduledStart: string; status: string }>;
   nextStartMinutes?: number;
   message?: string;
+  hasSessions?: boolean;
 }
 
 const registrationSchema = z.object({
@@ -114,6 +115,8 @@ export default function EmbedRegister() {
   };
 
   const mode = availableSessions?.mode || "fixed";
+  const hasSessions = availableSessions?.hasSessions || false;
+  const hasMultipleSessions = hasSessions && availableSessions && availableSessions.sessions.length > 1;
 
   const groupedSessions: Record<string, Array<{ id: string; scheduledStart: string; status: string }>> = {};
   if (availableSessions?.sessions) {
@@ -215,14 +218,14 @@ export default function EmbedRegister() {
         </div>
       )}
 
-      {mode === "fixed" && (
+      {mode === "fixed" && !hasMultipleSessions && (
         <div className="flex items-center justify-center gap-1.5 mb-4 text-xs text-muted-foreground">
           <Calendar className="h-3.5 w-3.5" />
-          <span>{formatDate(webinar.startTime)}</span>
+          <span>{formatDate(hasSessions && availableSessions?.sessions?.[0]?.scheduledStart ? availableSessions.sessions[0].scheduledStart : webinar.startTime)}</span>
         </div>
       )}
 
-      {mode === "recurring" && availableSessions && availableSessions.sessions.length > 0 && (
+      {hasMultipleSessions && (
         <div className="mb-4 relative">
           <div
             className="border rounded-md p-2.5 flex items-center justify-between cursor-pointer hover-elevate"
@@ -333,7 +336,7 @@ export default function EmbedRegister() {
             type="submit"
             className="w-full"
             style={{ backgroundColor: accentColor }}
-            disabled={registerMutation.isPending || (mode === "recurring" && !selectedSession)}
+            disabled={registerMutation.isPending || (hasMultipleSessions && !selectedSession)}
             data-testid="button-embed-register"
           >
             {registerMutation.isPending ? (
