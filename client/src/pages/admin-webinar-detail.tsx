@@ -25,7 +25,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, LineChart, Line } from "recharts";
 import type { Webinar, FakeUser, ScheduledMessage, CtaButton, Poll, Registration, Tip, Question, FeedbackSurvey } from "@shared/schema";
 import type { FeedbackResponse } from "@shared/schema";
 
@@ -1539,6 +1539,45 @@ export default function AdminWebinarDetail() {
                     </CardContent>
                   </Card>
                 </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">觀眾留存曲線</CardTitle>
+                    <CardDescription>觀眾在影片各時間點的留存比例</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {(() => {
+                      const attendedRegs = analytics.registrations?.filter(r => r.attended && r.watchDuration) || [];
+                      if (attendedRegs.length === 0) return <p className="text-center text-muted-foreground py-8">尚無數據</p>;
+                      const videoDuration = analytics.summary?.videoDuration || 3600;
+                      const totalViewers = attendedRegs.length;
+                      const points: { time: string; retention: number; viewers: number }[] = [];
+                      const steps = 10;
+                      for (let i = 0; i <= steps; i++) {
+                        const timeSec = Math.round((i / steps) * videoDuration);
+                        const viewersAtTime = attendedRegs.filter(r => (r.watchDuration || 0) >= timeSec).length;
+                        const mins = Math.floor(timeSec / 60);
+                        const secs = timeSec % 60;
+                        points.push({
+                          time: `${mins}:${secs.toString().padStart(2, "0")}`,
+                          retention: Math.round((viewersAtTime / totalViewers) * 100),
+                          viewers: viewersAtTime,
+                        });
+                      }
+                      return (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <AreaChart data={points}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis dataKey="time" fontSize={11} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                            <YAxis fontSize={11} tick={{ fill: "hsl(var(--muted-foreground))" }} domain={[0, 100]} unit="%" />
+                            <Tooltip formatter={(val: number, name: string) => name === "retention" ? [`${val}%`, "留存率"] : [val, "觀眾數"]} />
+                            <Area type="monotone" dataKey="retention" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.2)" name="retention" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
 
                 <Card>
                   <CardHeader>

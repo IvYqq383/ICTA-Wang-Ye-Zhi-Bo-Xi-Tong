@@ -839,7 +839,7 @@ export async function registerRoutes(
       for (const msg of sourceMessages) {
         await storage.createScheduledMessage({
           webinarId: newWebinar.id,
-          fakeUserId: fakeUserIdMap.get(msg.fakeUserId) || msg.fakeUserId,
+          fakeUserId: fakeUserIdMap.get(msg.fakeUserId || "") || msg.fakeUserId || "",
           message: msg.message,
           triggerTime: msg.triggerTime,
         });
@@ -877,6 +877,56 @@ export async function registerRoutes(
       }
 
       res.json(newWebinar);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ============ Public: Available Sessions ============
+  app.get("/api/webinars/:id/available-sessions", async (req, res) => {
+    try {
+      const webinar = await storage.getWebinar(req.params.id as string);
+      if (!webinar) return res.status(404).json({ message: "Webinar not found" });
+
+      const scheduleMode = webinar.scheduleMode as any;
+      const now = new Date();
+
+      if (scheduleMode?.onDemand) {
+        return res.json({
+          mode: "onDemand",
+          sessions: [],
+          message: "隨時可以觀看",
+        });
+      }
+
+      if (scheduleMode?.justInTime) {
+        const minutes = scheduleMode.justInTimeMinutes || 15;
+        const nextStart = new Date(now.getTime() + minutes * 60 * 1000);
+        return res.json({
+          mode: "justInTime",
+          sessions: [{ id: "jit", scheduledStart: nextStart, status: "scheduled" }],
+          nextStartMinutes: minutes,
+          message: `下一場將在 ${minutes} 分鐘內開始`,
+        });
+      }
+
+      const allSessions = await storage.getWebinarSessions(webinar.id);
+      const futureSessions = allSessions
+        .filter(s => new Date(s.scheduledStart) > now && s.status === "scheduled")
+        .sort((a, b) => new Date(a.scheduledStart).getTime() - new Date(b.scheduledStart).getTime())
+        .slice(0, 20);
+
+      if (futureSessions.length > 0) {
+        return res.json({
+          mode: "recurring",
+          sessions: futureSessions,
+        });
+      }
+
+      return res.json({
+        mode: "fixed",
+        sessions: [{ id: "main", scheduledStart: webinar.startTime, status: "scheduled" }],
+      });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

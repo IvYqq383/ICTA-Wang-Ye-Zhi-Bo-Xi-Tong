@@ -8,10 +8,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Calendar, Clock, Users, CheckCircle, Loader2 } from "lucide-react";
+import { Calendar, Clock, CheckCircle, Loader2, Play, Zap } from "lucide-react";
 import type { Webinar } from "@shared/schema";
+
+interface AvailableSessionsResponse {
+  mode: "fixed" | "recurring" | "onDemand" | "justInTime";
+  sessions: Array<{ id: string; scheduledStart: string; status: string }>;
+  nextStartMinutes?: number;
+  message?: string;
+}
 
 const registrationSchema = z.object({
   name: z.string().min(2, "姓名至少需要2個字"),
@@ -25,9 +34,15 @@ export default function Registration() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [registered, setRegistered] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<string | null>(null);
 
   const { data: webinar, isLoading } = useQuery<Webinar>({
     queryKey: ["/api/webinars", id],
+    enabled: !!id,
+  });
+
+  const { data: availableSessions } = useQuery<AvailableSessionsResponse>({
+    queryKey: ["/api/webinars", id, "available-sessions"],
     enabled: !!id,
   });
 
@@ -41,10 +56,14 @@ export default function Registration() {
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegistrationForm) => {
-      return apiRequest("POST", "/api/registrations", {
+      const payload: any = {
         ...data,
         webinarId: id,
-      });
+      };
+      if (selectedSession) {
+        payload.selectedSession = selectedSession;
+      }
+      return apiRequest("POST", "/api/registrations", payload);
     },
     onSuccess: () => {
       setRegistered(true);
@@ -62,11 +81,26 @@ export default function Registration() {
     },
   });
 
-  const formatDate = (date: Date) => {
+  const formatDate = (date: string | Date) => {
     return new Date(date).toLocaleString("zh-TW", {
       year: "numeric",
       month: "long",
       day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const formatShortDate = (date: string | Date) => {
+    return new Date(date).toLocaleString("zh-TW", {
+      month: "short",
+      day: "numeric",
+      weekday: "short",
+    });
+  };
+
+  const formatTime = (date: string | Date) => {
+    return new Date(date).toLocaleString("zh-TW", {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -97,6 +131,9 @@ export default function Registration() {
     ? { background: `linear-gradient(135deg, ${brandSettings.primaryColor} 0%, ${brandSettings.secondaryColor} 100%)` }
     : { background: "linear-gradient(135deg, #4338ca 0%, #7e22ce 50%, #be185d 100%)" };
 
+  const mode = availableSessions?.mode || "fixed";
+  const showSelectedTime = selectedSession || mode === "onDemand" || mode === "fixed";
+
   if (registered) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4" style={brandGradient}>
@@ -110,28 +147,44 @@ export default function Registration() {
             <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="h-8 w-8 text-green-600" />
             </div>
-            <h2 className="text-2xl font-bold mb-2">報名成功！</h2>
+            <h2 className="text-2xl font-bold mb-2" data-testid="text-registration-success">報名成功！</h2>
             <p className="text-muted-foreground mb-6">
               我們已將直播連結發送至您的 Email，請在直播時間準時加入。
             </p>
-            <div className="bg-muted rounded-lg p-4 mb-6">
+            <div className="bg-muted rounded-md p-4 mb-6">
               <h3 className="font-semibold mb-2">{webinar.title}</h3>
-              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span>{formatDate(webinar.startTime)}</span>
-              </div>
+              {mode === "onDemand" ? (
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Play className="h-4 w-4" />
+                  <span>隨時可以觀看</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
+                  <span>{selectedSession ? formatDate(selectedSession) : formatDate(webinar.startTime)}</span>
+                </div>
+              )}
             </div>
             <Button
               onClick={() => setLocation(`/webinar/${id}`)}
               className="w-full"
               data-testid="button-enter-webinar"
             >
-              進入直播間
+              {mode === "onDemand" ? "立即觀看" : "進入直播間"}
             </Button>
           </CardContent>
         </Card>
       </div>
     );
+  }
+
+  const groupedSessions: Record<string, Array<{ id: string; scheduledStart: string; status: string }>> = {};
+  if (availableSessions?.sessions) {
+    for (const session of availableSessions.sessions) {
+      const dateKey = formatShortDate(session.scheduledStart);
+      if (!groupedSessions[dateKey]) groupedSessions[dateKey] = [];
+      groupedSessions[dateKey].push(session);
+    }
   }
 
   return (
@@ -147,7 +200,7 @@ export default function Registration() {
             <img
               src={webinar.coverImage}
               alt={webinar.title}
-              className="w-full h-48 object-cover rounded-t-lg mb-4"
+              className="w-full h-48 object-cover rounded-md mb-4"
             />
           )}
           <CardTitle className="text-2xl">{webinar.title}</CardTitle>
@@ -158,12 +211,62 @@ export default function Registration() {
           )}
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-center gap-6 mb-6 text-sm">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Calendar className="h-4 w-4" />
-              <span>{formatDate(webinar.startTime)}</span>
+          {mode === "onDemand" && (
+            <div className="flex items-center justify-center gap-2 mb-6 p-3 bg-muted rounded-md">
+              <Play className="h-5 w-5 text-green-600" />
+              <span className="text-sm font-medium">隨選觀看 - 報名後隨時可以觀看</span>
             </div>
-          </div>
+          )}
+
+          {mode === "justInTime" && (
+            <div className="flex items-center justify-center gap-2 mb-6 p-3 bg-muted rounded-md">
+              <Zap className="h-5 w-5 text-amber-500" />
+              <span className="text-sm font-medium">
+                {availableSessions?.message || `下一場即將開始`}
+              </span>
+            </div>
+          )}
+
+          {mode === "fixed" && (
+            <div className="flex items-center justify-center gap-6 mb-6 text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                <span>{formatDate(webinar.startTime)}</span>
+              </div>
+            </div>
+          )}
+
+          {mode === "recurring" && availableSessions && availableSessions.sessions.length > 0 && (
+            <div className="mb-6">
+              <p className="text-sm font-medium mb-3 text-center">選擇您方便的時段</p>
+              <ScrollArea className="max-h-60">
+                <div className="space-y-3">
+                  {Object.entries(groupedSessions).map(([dateLabel, sessions]) => (
+                    <div key={dateLabel}>
+                      <p className="text-xs text-muted-foreground font-medium mb-1.5 px-1">{dateLabel}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {sessions.map((session) => (
+                          <Button
+                            key={session.id}
+                            size="sm"
+                            variant={selectedSession === session.scheduledStart ? "default" : "outline"}
+                            onClick={() => setSelectedSession(session.scheduledStart)}
+                            data-testid={`button-session-${session.id}`}
+                          >
+                            <Clock className="h-3 w-3 mr-1" />
+                            {formatTime(session.scheduledStart)}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+              {!selectedSession && (
+                <p className="text-xs text-destructive mt-2 text-center">請先選擇一個時段</p>
+              )}
+            </div>
+          )}
 
           <Form {...form}>
             <form
@@ -210,7 +313,7 @@ export default function Registration() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={registerMutation.isPending}
+                disabled={registerMutation.isPending || (mode === "recurring" && !selectedSession)}
                 data-testid="button-register"
               >
                 {registerMutation.isPending ? (

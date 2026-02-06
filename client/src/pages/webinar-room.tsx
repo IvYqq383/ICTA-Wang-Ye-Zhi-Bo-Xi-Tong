@@ -532,14 +532,23 @@ export default function WebinarRoom() {
 
   const surveyQuestions = feedbackSurvey?.questions as { id: string; type: string; question: string; options?: string[]; required: boolean }[] || [];
 
+  const brandAccentStyle = brandSettings?.primaryColor ? { borderColor: brandSettings.primaryColor } : {};
+  const autoplayParam = isOnDemand ? "1" : "0";
+
   return (
     <div className="min-h-screen bg-background">
-      <div className="flex flex-col lg:flex-row h-screen">
+      {brandSettings?.logo && (
+        <div className="h-10 flex items-center px-4 border-b" style={brandAccentStyle}>
+          <img src={brandSettings.logo} alt="Logo" className="max-h-6 object-contain" data-testid="brand-logo" />
+          <span className="ml-3 text-sm font-medium truncate">{webinar.title}</span>
+        </div>
+      )}
+      <div className={`flex flex-col lg:flex-row ${brandSettings?.logo ? "h-[calc(100vh-2.5rem)]" : "h-screen"}`}>
         <div className="flex-1 relative bg-black">
           <div className="relative w-full h-full min-h-[300px] lg:min-h-0">
             <iframe
               ref={iframeRef}
-              src={`https://player.vimeo.com/video/${extractVimeoId(webinar.vimeoUrl)}?autoplay=0&title=0&byline=0&portrait=0`}
+              src={`https://player.vimeo.com/video/${extractVimeoId(webinar.vimeoUrl)}?autoplay=${autoplayParam}&title=0&byline=0&portrait=0`}
               className="absolute inset-0 w-full h-full"
               allow="autoplay; fullscreen; picture-in-picture"
               allowFullScreen
