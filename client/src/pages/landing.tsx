@@ -413,16 +413,19 @@ export default function Landing() {
     <div className="min-h-screen bg-background">
       <nav className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <img src="/favicon.png" alt="ICTA" className="w-8 h-8 object-contain" />
-            <span className="font-bold text-lg tracking-tight" data-testid="text-brand-name">ICTA-WEBINAR 亞洲教育自動化行銷研討會系統</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <img src="/favicon.png" alt="ICTA" className="w-8 h-8 object-contain shrink-0" />
+            <div className="min-w-0" data-testid="text-brand-name">
+              <span className="font-bold text-base sm:text-lg tracking-tight block truncate">ICTA-WEBINAR</span>
+              <span className="hidden sm:block text-xs text-muted-foreground leading-tight truncate">亞洲教育自動化行銷研討會系統</span>
+            </div>
           </div>
           <div className="hidden md:flex items-center gap-6">
             <a href="#features" className="text-sm text-muted-foreground transition-colors" data-testid="link-features">{s.navFeatures}</a>
             <a href="#how-it-works" className="text-sm text-muted-foreground transition-colors" data-testid="link-how">{s.navHow}</a>
             <a href="#pricing" className="text-sm text-muted-foreground transition-colors" data-testid="link-pricing">{s.navPricing}</a>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <div className="relative" onClick={(e) => e.stopPropagation()}>
               <Button
                 variant="ghost"
@@ -448,10 +451,10 @@ export default function Landing() {
                 </div>
               )}
             </div>
-            <Button variant="ghost" onClick={() => setLocation("/admin")} data-testid="button-sign-in">
+            <Button variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={() => setLocation("/admin")} data-testid="button-sign-in">
               {s.signIn}
             </Button>
-            <Button onClick={() => setLocation("/admin")} data-testid="button-get-started-nav">
+            <Button size="sm" onClick={() => setLocation("/admin")} data-testid="button-get-started-nav">
               {s.getStarted}
               <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
