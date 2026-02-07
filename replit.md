@@ -41,12 +41,15 @@
 - **預排訊息**：根據影片播放時間觸發，所有觀眾在相同的相對時間點看到相同的假人訊息
 - **主持人視角**：主持人可以看到所有場次的訊息，並回覆特定觀眾
 
-### 訂閱方案管理
-- **免費方案**：最多 1 個直播間
-- **月租方案**：$49/月，最多 3 個直播間
-- **企業方案**：聯繫客服，自訂上限
+### 訂閱方案管理（Stripe 整合）
+- **免費方案**：瀏覽後台但無法建立直播間，需升級
+- **月租方案**：$49/月（Stripe 訂閱），可建立無限草稿，最多發佈 3 個直播間
+- **企業方案**：超級管理員，無限制
+- Stripe Price ID: `price_1Sy8bxIbl9Q8nuPzsLN1d2VC`（環境變數 `STRIPE_MONTHLY_PRICE_ID`）
+- **發佈工作流**：直播間預設為「草稿」狀態，需手動發佈才啟用報名連結
 - 超級管理員（admin 帳號）可在 `/super-admin` 管理所有使用者的方案、到期日、啟停用
-- 建立直播間時會檢查方案上限和到期日
+- Stripe 相關檔案：`server/stripeClient.ts`、`server/webhookHandlers.ts`、`server/seed-stripe-products.ts`
+- Stripe 路由：checkout、portal、config、handle-subscription、webhook
 
 ### 後台功能（管理員）
 - **帳號**：admin / aa3210（超級管理員）
