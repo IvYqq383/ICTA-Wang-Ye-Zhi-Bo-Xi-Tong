@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Radio, Play, MessageCircle, BarChart3, Zap, Users, Clock,
+  Play, MessageCircle, BarChart3, Zap, Users, Clock,
   Shield, ArrowRight, CheckCircle2, MousePointerClick, Bot,
   Globe, ChevronRight, Layers, Languages
 } from "lucide-react";
@@ -414,9 +414,7 @@ export default function Landing() {
       <nav className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <Radio className="w-4 h-4 text-primary-foreground" />
-            </div>
+            <img src="/favicon.png" alt="ICTA" className="w-8 h-8 object-contain" />
             <span className="font-bold text-lg tracking-tight" data-testid="text-brand-name">ICTA-WEBINAR</span>
           </div>
           <div className="hidden md:flex items-center gap-6">
@@ -692,9 +690,7 @@ export default function Landing() {
       <footer className="border-t py-8">
         <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-primary rounded flex items-center justify-center">
-              <Radio className="w-3 h-3 text-primary-foreground" />
-            </div>
+            <img src="/favicon.png" alt="ICTA" className="w-6 h-6 object-contain" />
             <span className="text-sm font-semibold">ICTA-WEBINAR</span>
           </div>
           <p className="text-xs text-muted-foreground">

@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2, Radio, Languages } from "lucide-react";
+import { Loader2, Languages } from "lucide-react";
 import { useLang, type LangFull } from "@/hooks/use-lang";
 
 const langLabels: Record<LangFull, string> = {
@@ -257,9 +257,7 @@ export default function AdminLogin() {
 
       <div className="mb-8 text-center">
         <div className="flex items-center justify-center gap-3 mb-3">
-          <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-            <Radio className="w-5 h-5 text-primary-foreground" />
-          </div>
+          <img src="/favicon.png" alt="ICTA" className="w-10 h-10 object-contain" />
           <h1 className="text-3xl font-bold text-white tracking-tight">ICTA-WEBINAR</h1>
         </div>
         <p className="text-slate-400 text-sm">{s.subtitle}</p>
