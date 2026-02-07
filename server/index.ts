@@ -4,6 +4,9 @@ import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { runMigrations } from "stripe-replit-sync";
+import { getStripeSync } from "./stripeClient";
+import { WebhookHandlers } from "./webhookHandlers";
 
 const app = express();
 const httpServer = createServer(app);
@@ -34,6 +37,29 @@ app.use(
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   })
+);
+
+app.post(
+  '/api/stripe/webhook',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const signature = req.headers['stripe-signature'];
+    if (!signature) {
+      return res.status(400).json({ error: 'Missing stripe-signature' });
+    }
+    try {
+      const sig = Array.isArray(signature) ? signature[0] : signature;
+      if (!Buffer.isBuffer(req.body)) {
+        console.error('STRIPE WEBHOOK ERROR: req.body is not a Buffer.');
+        return res.status(500).json({ error: 'Webhook processing error' });
+      }
+      await WebhookHandlers.processWebhook(req.body as Buffer, sig);
+      res.status(200).json({ received: true });
+    } catch (error: any) {
+      console.error('Webhook error:', error.message);
+      res.status(400).json({ error: 'Webhook processing error' });
+    }
+  }
 );
 
 app.use(
@@ -84,6 +110,29 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  try {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (databaseUrl) {
+      log('Initializing Stripe schema...', 'stripe');
+      await runMigrations({ databaseUrl });
+      log('Stripe schema ready', 'stripe');
+
+      const stripeSync = await getStripeSync();
+
+      const webhookBaseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+      const { webhook } = await stripeSync.findOrCreateManagedWebhook(
+        `${webhookBaseUrl}/api/stripe/webhook`
+      );
+      log(`Webhook configured: ${webhook.url}`, 'stripe');
+
+      stripeSync.syncBackfill()
+        .then(() => log('Stripe data synced', 'stripe'))
+        .catch((err: any) => console.error('Error syncing Stripe data:', err));
+    }
+  } catch (error) {
+    console.error('Failed to initialize Stripe:', error);
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

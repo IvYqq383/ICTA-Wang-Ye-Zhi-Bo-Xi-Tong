@@ -13,6 +13,7 @@ export const webinars = pgTable("webinars", {
   coverImage: text("cover_image"),
   startTime: timestamp("start_time").notNull(),
   status: text("status").notNull().default("scheduled"), // scheduled, live, ended
+  publishStatus: text("publish_status").notNull().default("draft"), // draft, published
   videoDuration: integer("video_duration").default(0), // in seconds
   
   // 排程模式設定
@@ -364,13 +365,15 @@ export const users = pgTable("users", {
   companyName: text("company_name").default(""),
   subscriptionPlan: text("subscription_plan").notNull().default("free"),
   planExpiresAt: timestamp("plan_expires_at"),
-  maxWebinars: integer("max_webinars").notNull().default(1),
+  maxWebinars: integer("max_webinars").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   isSuperAdmin: boolean("is_super_admin").notNull().default(false),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, subscriptionPlan: true, planExpiresAt: true, maxWebinars: true, isActive: true, isSuperAdmin: true });
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, subscriptionPlan: true, planExpiresAt: true, maxWebinars: true, isActive: true, isSuperAdmin: true, stripeCustomerId: true, stripeSubscriptionId: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 

@@ -39,4 +39,9 @@ args = "npm run dev"
 waitForPort = 5000
 
 [agent]
-integrations = ["google-mail:1.0.0"]
+integrations = ["google-mail:1.0.0", "stripe:2.0.0"]
+
+[userenv]
+
+[userenv.shared]
+STRIPE_MONTHLY_PRICE_ID = "price_1Sy8bxIbl9Q8nuPzsLN1d2VC"

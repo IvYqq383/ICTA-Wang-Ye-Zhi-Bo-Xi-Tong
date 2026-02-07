@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -96,6 +96,23 @@ const t: Record<LangAdmin, {
   subRooms: string;
   superAdminPanel: string;
   subUpgrade: string;
+  subPublished: string;
+  subDraft: string;
+  subPublishLimit: string;
+  publishBtn: string;
+  unpublishBtn: string;
+  upgradeTitle: string;
+  upgradeDesc: string;
+  upgradeBtn: string;
+  manageSubscription: string;
+  toastPublishSuccess: string;
+  toastPublishSuccessDesc: string;
+  toastUnpublishSuccess: string;
+  toastUnpublishSuccessDesc: string;
+  toastUpgradeNeeded: string;
+  toastUpgradeNeededDesc: string;
+  publishLimitReached: string;
+  publishLimitReachedDesc: string;
 }> = {
   "zh-TW": {
     validationTitle: "請輸入標題",
@@ -162,6 +179,23 @@ const t: Record<LangAdmin, {
     subRooms: "間",
     superAdminPanel: "使用者管理",
     subUpgrade: "升級方案",
+    subPublished: "已發佈",
+    subDraft: "草稿",
+    subPublishLimit: "已發佈數量",
+    publishBtn: "發佈",
+    unpublishBtn: "取消發佈",
+    upgradeTitle: "升級方案",
+    upgradeDesc: "訂閱月租方案 ($49/月) 即可建立並發佈最多 3 個直播間",
+    upgradeBtn: "立即訂閱",
+    manageSubscription: "管理訂閱",
+    toastPublishSuccess: "已發佈",
+    toastPublishSuccessDesc: "直播間已發佈，報名連結已啟用",
+    toastUnpublishSuccess: "已取消發佈",
+    toastUnpublishSuccessDesc: "直播間已轉為草稿狀態",
+    toastUpgradeNeeded: "需要升級方案",
+    toastUpgradeNeededDesc: "免費方案無法建立直播間，請先升級",
+    publishLimitReached: "已達發佈上限",
+    publishLimitReachedDesc: "最多可發佈 3 個直播間，請取消發佈其他直播間",
   },
   "zh-CN": {
     validationTitle: "请输入标题",
@@ -228,6 +262,23 @@ const t: Record<LangAdmin, {
     subRooms: "间",
     superAdminPanel: "用户管理",
     subUpgrade: "升级方案",
+    subPublished: "已发布",
+    subDraft: "草稿",
+    subPublishLimit: "已发布数量",
+    publishBtn: "发布",
+    unpublishBtn: "取消发布",
+    upgradeTitle: "升级方案",
+    upgradeDesc: "订阅月租方案 ($49/月) 即可创建并发布最多 3 个直播间",
+    upgradeBtn: "立即订阅",
+    manageSubscription: "管理订阅",
+    toastPublishSuccess: "已发布",
+    toastPublishSuccessDesc: "直播间已发布，报名链接已启用",
+    toastUnpublishSuccess: "已取消发布",
+    toastUnpublishSuccessDesc: "直播间已转为草稿状态",
+    toastUpgradeNeeded: "需要升级方案",
+    toastUpgradeNeededDesc: "免费方案无法创建直播间，请先升级",
+    publishLimitReached: "已达发布上限",
+    publishLimitReachedDesc: "最多可发布 3 个直播间，请取消发布其他直播间",
   },
 };
 
@@ -266,11 +317,22 @@ export default function AdminDashboard() {
     planExpiresAt: string | null;
     maxWebinars: number;
     webinarCount: number;
+    publishedCount: number;
     isActive: boolean;
     isExpired: boolean;
     isSuperAdmin: boolean;
+    stripeCustomerId: string | null;
+    stripeSubscriptionId: string | null;
   }>({
     queryKey: ["/api/admin/subscription"],
+  });
+
+  const { data: stripeConfig } = useQuery<{
+    publishableKey: string;
+    monthlyPriceId: string;
+  }>({
+    queryKey: ["/api/stripe/config"],
+    enabled: subscription?.plan === "free",
   });
 
   const form = useForm<WebinarForm>({
@@ -301,11 +363,15 @@ export default function AdminDashboard() {
       });
     },
     onError: (error: any) => {
-      toast({
-        title: s.toastCreateFail,
-        description: error.message,
-        variant: "destructive",
-      });
+      if (error.message === "FREE_PLAN" || error.message?.includes("FREE_PLAN")) {
+        toast({ title: s.toastUpgradeNeeded, description: s.toastUpgradeNeededDesc, variant: "destructive" });
+      } else {
+        toast({
+          title: s.toastCreateFail,
+          description: error.message,
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -334,6 +400,74 @@ export default function AdminDashboard() {
       toast({ title: s.toastDeleteFail, description: error.message, variant: "destructive" });
     },
   });
+
+  const publishMutation = useMutation({
+    mutationFn: async (webinarId: string) => {
+      return apiRequest("POST", `/api/webinars/${webinarId}/publish`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/subscription"] });
+      toast({ title: s.toastPublishSuccess, description: s.toastPublishSuccessDesc });
+    },
+    onError: (error: any) => {
+      if (error.message === "PUBLISH_LIMIT" || error.message?.includes("PUBLISH_LIMIT")) {
+        toast({ title: s.publishLimitReached, description: s.publishLimitReachedDesc, variant: "destructive" });
+      } else {
+        toast({ title: s.toastCreateFail, description: error.message, variant: "destructive" });
+      }
+    },
+  });
+
+  const unpublishMutation = useMutation({
+    mutationFn: async (webinarId: string) => {
+      return apiRequest("POST", `/api/webinars/${webinarId}/unpublish`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/subscription"] });
+      toast({ title: s.toastUnpublishSuccess, description: s.toastUnpublishSuccessDesc });
+    },
+    onError: (error: any) => {
+      toast({ title: s.toastCreateFail, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const checkoutMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/stripe/checkout", { priceId: stripeConfig?.monthlyPriceId });
+      return await res.json();
+    },
+    onSuccess: (data: { url: string }) => {
+      if (data.url) window.location.href = data.url;
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const portalMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/stripe/portal", {});
+      return await res.json();
+    },
+    onSuccess: (data: { url: string }) => {
+      if (data.url) window.location.href = data.url;
+    },
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") === "success") {
+      apiRequest("POST", "/api/stripe/handle-subscription", {})
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/subscription"] });
+          toast({ title: s.toastCreateSuccess, description: "訂閱已啟用" });
+          window.history.replaceState({}, "", "/admin/dashboard");
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -424,25 +558,40 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-4 flex-wrap">
                 <div>
                   <span className="text-sm text-muted-foreground">{s.subPlanLabel}: </span>
-                  <Badge variant={subscription.plan === "monthly" ? "default" : subscription.plan === "enterprise" ? "secondary" : "outline"} data-testid="badge-current-plan">
-                    {subscription.plan === "monthly" ? s.subPlanMonthly : subscription.plan === "enterprise" ? s.subPlanEnterprise : s.subPlanFree}
+                  <Badge variant={subscription.plan === "monthly" ? "default" : "outline"} data-testid="badge-current-plan">
+                    {subscription.plan === "monthly" ? s.subPlanMonthly : s.subPlanFree}
                   </Badge>
                   {subscription.isExpired && <Badge variant="destructive" className="ml-2" data-testid="badge-expired">{s.subExpired}</Badge>}
                 </div>
-                <div className="text-sm">
-                  <span className="text-muted-foreground">{s.subWebinarUsage}: </span>
-                  <span className="font-semibold" data-testid="text-webinar-usage">{subscription.webinarCount}{s.subOf}{subscription.maxWebinars} {s.subRooms}</span>
-                </div>
-                {subscription.planExpiresAt && (
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">{s.subExpires}: </span>
-                    <span data-testid="text-plan-expires">{new Date(subscription.planExpiresAt).toLocaleDateString()}</span>
-                  </div>
+                {subscription.plan === "monthly" && (
+                  <>
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">{s.subPublishLimit}: </span>
+                      <span className="font-semibold" data-testid="text-published-count">{subscription.publishedCount}{s.subOf}{subscription.maxWebinars} {s.subRooms}</span>
+                    </div>
+                    {subscription.planExpiresAt && (
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">{s.subExpires}: </span>
+                        <span data-testid="text-plan-expires">{new Date(subscription.planExpiresAt).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
-              {subscription.plan === "free" && (
-                <span className="text-sm text-muted-foreground">{s.subContactUs}</span>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                {subscription.plan === "free" && (
+                  <Button size="sm" onClick={() => checkoutMutation.mutate()} disabled={checkoutMutation.isPending || !stripeConfig?.monthlyPriceId} data-testid="button-upgrade">
+                    <Crown className="h-4 w-4 mr-1" />
+                    {checkoutMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                    {s.upgradeBtn}
+                  </Button>
+                )}
+                {subscription.plan === "monthly" && subscription.stripeCustomerId && (
+                  <Button variant="outline" size="sm" onClick={() => portalMutation.mutate()} disabled={portalMutation.isPending} data-testid="button-manage-subscription">
+                    {s.manageSubscription}
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -453,12 +602,19 @@ export default function AdminDashboard() {
             <p className="text-muted-foreground">{s.managementDesc}</p>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-create-webinar">
-                <Plus className="h-4 w-4 mr-2" />
-                {s.createWebinar}
-              </Button>
-            </DialogTrigger>
+            <Button
+              data-testid="button-create-webinar"
+              onClick={() => {
+                if (subscription && subscription.plan === "free" && !subscription.isSuperAdmin) {
+                  toast({ title: s.toastUpgradeNeeded, description: s.toastUpgradeNeededDesc, variant: "destructive" });
+                  return;
+                }
+                setIsCreateOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {s.createWebinar}
+            </Button>
             <DialogContent className="sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>{s.createNewWebinar}</DialogTitle>
@@ -600,6 +756,11 @@ export default function AdminDashboard() {
                               {webinar.title}
                             </h3>
                             {getStatusBadge(webinar)}
+                            {webinar.publishStatus === "published" ? (
+                              <Badge variant="default" className="bg-green-600 text-white" data-testid={`badge-publish-${webinar.id}`}>{s.subPublished}</Badge>
+                            ) : (
+                              <Badge variant="secondary" data-testid={`badge-publish-${webinar.id}`}>{s.subDraft}</Badge>
+                            )}
                           </div>
                         </div>
 
@@ -660,6 +821,31 @@ export default function AdminDashboard() {
                           <Radio className="h-3.5 w-3.5" />
                           <span className="hidden md:inline">{s.actionControl}</span>
                         </Button>
+                        {webinar.publishStatus === "published" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start gap-2 text-xs w-full"
+                            onClick={(e) => { e.stopPropagation(); unpublishMutation.mutate(webinar.id); }}
+                            disabled={unpublishMutation.isPending}
+                            data-testid={`button-unpublish-${webinar.id}`}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            <span className="hidden md:inline">{s.unpublishBtn}</span>
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start gap-2 text-xs w-full text-green-600"
+                            onClick={(e) => { e.stopPropagation(); publishMutation.mutate(webinar.id); }}
+                            disabled={publishMutation.isPending}
+                            data-testid={`button-publish-${webinar.id}`}
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span className="hidden md:inline">{s.publishBtn}</span>
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -668,6 +854,7 @@ export default function AdminDashboard() {
                             e.stopPropagation();
                             handleShare(webinar);
                           }}
+                          disabled={webinar.publishStatus !== "published"}
                           data-testid={`button-share-${webinar.id}`}
                         >
                           <Share2 className="h-3.5 w-3.5" />

@@ -132,6 +132,18 @@ export default function Registration() {
     );
   }
 
+  if (webinar.publishStatus !== "published") {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(135deg, #4338ca 0%, #7e22ce 50%, #be185d 100%)" }}>
+        <Card className="max-w-md mx-auto">
+          <CardContent className="pt-6">
+            <p className="text-center text-muted-foreground" data-testid="text-webinar-not-published">此研討會尚未開放報名</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const brandSettings = webinar.brandSettings as { logo?: string; primaryColor?: string; secondaryColor?: string; backgroundColor?: string } | null;
   const brandGradient = brandSettings?.primaryColor && brandSettings?.secondaryColor
     ? { background: `linear-gradient(135deg, ${brandSettings.primaryColor} 0%, ${brandSettings.secondaryColor} 100%)` }

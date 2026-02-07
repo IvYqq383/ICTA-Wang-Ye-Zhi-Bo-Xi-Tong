@@ -25,6 +25,7 @@ import {
 } from "@shared/schema";
 
 import bcrypt from "bcryptjs";
+import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 
 declare module "express-session" {
   interface SessionData {
@@ -497,15 +498,19 @@ export async function registerRoutes(
       const user = await storage.getUser(req.session.userId!);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
       const webinarCount = await storage.getWebinarCountByUser(user.id);
+      const publishedCount = await storage.getPublishedWebinarCountByUser(user.id);
       const isExpired = user.planExpiresAt ? new Date(user.planExpiresAt) < new Date() : false;
       res.json({
         plan: user.subscriptionPlan,
         planExpiresAt: user.planExpiresAt,
         maxWebinars: user.maxWebinars,
         webinarCount,
+        publishedCount,
         isActive: user.isActive,
         isExpired,
         isSuperAdmin: user.isSuperAdmin,
+        stripeCustomerId: user.stripeCustomerId,
+        stripeSubscriptionId: user.stripeSubscriptionId,
       });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -611,12 +616,11 @@ export async function registerRoutes(
       if (!user || !user.isActive) {
         return res.status(403).json({ message: "帳號已停用" });
       }
-      if (user.planExpiresAt && new Date(user.planExpiresAt) < new Date()) {
-        return res.status(403).json({ message: "訂閱方案已過期，請聯繫客服續約" });
+      if (!user.isSuperAdmin && user.subscriptionPlan === "free") {
+        return res.status(403).json({ message: "FREE_PLAN", code: "FREE_PLAN" });
       }
-      const currentCount = await storage.getWebinarCountByUser(user.id);
-      if (currentCount >= user.maxWebinars) {
-        return res.status(403).json({ message: `已達方案上限（${user.maxWebinars} 個直播間），請升級方案` });
+      if (!user.isSuperAdmin && user.planExpiresAt && new Date(user.planExpiresAt) < new Date()) {
+        return res.status(403).json({ message: "SUBSCRIPTION_EXPIRED", code: "SUBSCRIPTION_EXPIRED" });
       }
       const data = insertWebinarSchema.parse({ ...req.body, userId: req.session.userId });
       const webinar = await storage.createWebinar(data);
@@ -647,6 +651,186 @@ export async function registerRoutes(
     }
   });
 
+  // ============ Publish / Unpublish Webinar ============
+  app.post("/api/webinars/:id/publish", requireWebinarOwner, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || !user.isActive) {
+        return res.status(403).json({ message: "帳號已停用" });
+      }
+      if (!user.isSuperAdmin && user.subscriptionPlan === "free") {
+        return res.status(403).json({ message: "FREE_PLAN", code: "FREE_PLAN" });
+      }
+      if (!user.isSuperAdmin && user.planExpiresAt && new Date(user.planExpiresAt) < new Date()) {
+        return res.status(403).json({ message: "SUBSCRIPTION_EXPIRED", code: "SUBSCRIPTION_EXPIRED" });
+      }
+      const publishedCount = await storage.getPublishedWebinarCountByUser(user.id);
+      const maxPublished = user.isSuperAdmin ? 999 : (user.maxWebinars || 3);
+      if (publishedCount >= maxPublished) {
+        return res.status(403).json({ message: "PUBLISH_LIMIT", code: "PUBLISH_LIMIT", maxPublished });
+      }
+      const webinar = await storage.updateWebinar(req.params.id as string, { publishStatus: "published" } as any);
+      if (!webinar) {
+        return res.status(404).json({ message: "Webinar not found" });
+      }
+      res.json(webinar);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/webinars/:id/unpublish", requireWebinarOwner, async (req, res) => {
+    try {
+      const webinar = await storage.updateWebinar(req.params.id as string, { publishStatus: "draft" } as any);
+      if (!webinar) {
+        return res.status(404).json({ message: "Webinar not found" });
+      }
+      res.json(webinar);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // ============ Stripe Routes ============
+  app.get("/api/stripe/publishable-key", async (_req, res) => {
+    try {
+      const key = await getStripePublishableKey();
+      res.json({ publishableKey: key });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/stripe/config", async (_req, res) => {
+    try {
+      const key = await getStripePublishableKey();
+      res.json({
+        publishableKey: key,
+        monthlyPriceId: process.env.STRIPE_MONTHLY_PRICE_ID || "",
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/stripe/checkout", requireAdmin, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+      const stripe = await getUncachableStripeClient();
+
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email || undefined,
+          metadata: { userId: user.id, username: user.username },
+        });
+        await storage.updateUser(user.id, { stripeCustomerId: customer.id } as any);
+        customerId = customer.id;
+      }
+
+      const priceId = req.body.priceId;
+      if (!priceId) {
+        return res.status(400).json({ message: "priceId is required" });
+      }
+
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ["card"],
+        line_items: [{ price: priceId, quantity: 1 }],
+        mode: "subscription",
+        success_url: `${baseUrl}/admin/dashboard?checkout=success`,
+        cancel_url: `${baseUrl}/admin/dashboard?checkout=cancel`,
+      });
+
+      res.json({ url: session.url });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/stripe/portal", requireAdmin, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || !user.stripeCustomerId) {
+        return res.status(400).json({ message: "No Stripe customer found" });
+      }
+
+      const stripe = await getUncachableStripeClient();
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: user.stripeCustomerId,
+        return_url: `${baseUrl}/admin/dashboard`,
+      });
+
+      res.json({ url: portalSession.url });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/stripe/subscription-status", requireAdmin, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+      if (!user.stripeSubscriptionId) {
+        return res.json({ active: false, plan: user.subscriptionPlan });
+      }
+
+      const stripe = await getUncachableStripeClient();
+      try {
+        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId) as any;
+        const isActive = subscription.status === "active" || subscription.status === "trialing";
+        return res.json({
+          active: isActive,
+          plan: user.subscriptionPlan,
+          status: subscription.status,
+          currentPeriodEnd: subscription.current_period_end,
+          cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        });
+      } catch {
+        return res.json({ active: false, plan: user.subscriptionPlan });
+      }
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/stripe/handle-subscription", requireAdmin, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || !user.stripeCustomerId) {
+        return res.status(400).json({ message: "No customer" });
+      }
+
+      const stripe = await getUncachableStripeClient();
+      const subscriptions = await stripe.subscriptions.list({
+        customer: user.stripeCustomerId,
+        status: "active",
+        limit: 1,
+      });
+
+      if (subscriptions.data.length > 0) {
+        const sub = subscriptions.data[0] as any;
+        const periodEnd = new Date(sub.current_period_end * 1000);
+        await storage.updateUser(user.id, {
+          subscriptionPlan: "monthly",
+          stripeSubscriptionId: sub.id,
+          maxWebinars: 3,
+          planExpiresAt: periodEnd,
+        } as any);
+        return res.json({ success: true, plan: "monthly" });
+      }
+
+      return res.json({ success: false, message: "No active subscription found" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // ============ Registration Routes ============
   app.post("/api/registrations", async (req, res) => {
     try {
@@ -655,8 +839,12 @@ export async function registerRoutes(
         body.selectedSession = new Date(body.selectedSession);
       }
       const data = insertRegistrationSchema.parse(body);
+
+      const webinarCheck = await storage.getWebinar(data.webinarId);
+      if (!webinarCheck || webinarCheck.publishStatus !== "published") {
+        return res.status(403).json({ message: "此直播間尚未發佈，無法報名" });
+      }
       
-      // Check if already registered
       const existing = await storage.getRegistrationByEmail(data.webinarId, data.email);
       if (existing) {
         return res.status(400).json({ message: "此 Email 已報名" });

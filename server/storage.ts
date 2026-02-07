@@ -30,6 +30,8 @@ export interface IStorage {
   listAllUsers(): Promise<User[]>;
   updateUser(id: string, data: Partial<Omit<User, "id" | "password" | "createdAt">>): Promise<User | undefined>;
   getWebinarCountByUser(userId: string): Promise<number>;
+  getPublishedWebinarCountByUser(userId: string): Promise<number>;
+  getUserByStripeCustomerId(stripeCustomerId: string): Promise<User | undefined>;
   
   // Webinars
   createWebinar(data: InsertWebinar): Promise<Webinar>;
@@ -158,6 +160,16 @@ export class DatabaseStorage implements IStorage {
   async getWebinarCountByUser(userId: string): Promise<number> {
     const result = await db.select({ value: count() }).from(webinars).where(eq(webinars.userId, userId));
     return result[0]?.value || 0;
+  }
+
+  async getPublishedWebinarCountByUser(userId: string): Promise<number> {
+    const result = await db.select({ value: count() }).from(webinars).where(and(eq(webinars.userId, userId), eq(webinars.publishStatus, "published")));
+    return result[0]?.value || 0;
+  }
+
+  async getUserByStripeCustomerId(stripeCustomerId: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.stripeCustomerId, stripeCustomerId));
+    return result[0];
   }
 
   // Webinars
