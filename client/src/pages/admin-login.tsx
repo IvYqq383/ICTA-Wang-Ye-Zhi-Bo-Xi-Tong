@@ -258,7 +258,7 @@ export default function AdminLogin() {
       <div className="mb-8 text-center">
         <div className="flex items-center justify-center gap-3 mb-3">
           <img src="/favicon.png" alt="ICTA" className="w-10 h-10 object-contain" />
-          <h1 className="text-3xl font-bold text-white tracking-tight">ICTA-WEBINAR</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">ICTA-WEBINAR 亞洲教育自動化行銷研討會系統</h1>
         </div>
         <p className="text-slate-400 text-sm">{s.subtitle}</p>
       </div>

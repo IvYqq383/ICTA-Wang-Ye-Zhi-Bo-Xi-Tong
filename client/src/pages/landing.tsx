@@ -112,7 +112,7 @@ const t = {
     ctaDesc: "加入數千位使用 ICTA-WEBINAR 全天候舉辦精彩自動化研討會的行銷人和教育者。",
     ctaButton: "建立您的第一場研討會",
     footerRights: "保留所有權利。",
-    seoTitle: "ICTA-WEBINAR - 自動化研討會平台 | 將影片轉化為直播體驗",
+    seoTitle: "ICTA-WEBINAR 亞洲教育自動化行銷研討會系統",
     seoDesc: "打造彷彿直播的自動化研討會。透過模擬聊天、定時 CTA、投票等功能，全程自動運行。",
     price_free: "免費",
     price_pro: "$49",
@@ -206,7 +206,7 @@ const t = {
     ctaDesc: "加入数千位使用 ICTA-WEBINAR 全天候举办精彩自动化研讨会的营销人和教育者。",
     ctaButton: "创建您的第一场研讨会",
     footerRights: "保留所有权利。",
-    seoTitle: "ICTA-WEBINAR - 自动化研讨会平台 | 将视频转化为直播体验",
+    seoTitle: "ICTA-WEBINAR 亚洲教育自动化行销研讨会系统",
     seoDesc: "打造仿佛直播的自动化研讨会。通过模拟聊天、定时 CTA、投票等功能，全程自动运行。",
     price_free: "免费",
     price_pro: "$49",
@@ -300,7 +300,7 @@ const t = {
     ctaDesc: "Join thousands of marketers and educators who use ICTA-WEBINAR to run engaging, automated webinars around the clock.",
     ctaButton: "Create Your First Webinar",
     footerRights: "All rights reserved.",
-    seoTitle: "ICTA-WEBINAR - Automated Webinar Platform | Turn Videos Into Live Experiences",
+    seoTitle: "ICTA-WEBINAR - Asia Education Automated Marketing Webinar System",
     seoDesc: "Create automated webinars that feel live. Engage your audience with simulated chat, timed CTAs, polls, and more — all running on autopilot with ICTA-WEBINAR.",
     price_free: "Free",
     price_pro: "$49",
@@ -415,7 +415,7 @@ export default function Landing() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
             <img src="/favicon.png" alt="ICTA" className="w-8 h-8 object-contain" />
-            <span className="font-bold text-lg tracking-tight" data-testid="text-brand-name">ICTA-WEBINAR</span>
+            <span className="font-bold text-lg tracking-tight" data-testid="text-brand-name">ICTA-WEBINAR 亞洲教育自動化行銷研討會系統</span>
           </div>
           <div className="hidden md:flex items-center gap-6">
             <a href="#features" className="text-sm text-muted-foreground transition-colors" data-testid="link-features">{s.navFeatures}</a>
@@ -691,7 +691,7 @@ export default function Landing() {
         <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <img src="/favicon.png" alt="ICTA" className="w-6 h-6 object-contain" />
-            <span className="text-sm font-semibold">ICTA-WEBINAR</span>
+            <span className="text-sm font-semibold">ICTA-WEBINAR 亞洲教育自動化行銷研討會系統</span>
           </div>
           <p className="text-xs text-muted-foreground">
             &copy; {new Date().getFullYear()} ICTA-WEBINAR. {s.footerRights}

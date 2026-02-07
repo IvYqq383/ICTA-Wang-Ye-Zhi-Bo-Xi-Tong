@@ -340,7 +340,7 @@ export default function AdminDashboard() {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <img src="/favicon.png" alt="ICTA" className="w-8 h-8 object-contain" />
-            <h1 className="text-xl font-bold tracking-tight">ICTA-WEBINAR</h1>
+            <h1 className="text-xl font-bold tracking-tight">ICTA-WEBINAR 亞洲教育自動化行銷研討會系統</h1>
           </div>
           <div className="flex items-center gap-1">
             <Button
