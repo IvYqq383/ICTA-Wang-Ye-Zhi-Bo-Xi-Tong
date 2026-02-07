@@ -17,7 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAdminLang, type LangAdmin } from "@/hooks/use-lang";
 import { 
-  Plus, Video, Calendar, 
+  Plus, Video, Calendar, Crown,
   ExternalLink, Loader2, LogOut, Radio, Copy,
   BarChart3, Users, Pencil, Share2, MessageCircle,
   Eye, Code, Trash2, MoreVertical, Languages
@@ -83,6 +83,19 @@ const t: Record<LangAdmin, {
   deleteConfirm: string;
   emptyTitle: string;
   emptyDesc: string;
+  subPlanLabel: string;
+  subPlanFree: string;
+  subPlanMonthly: string;
+  subPlanEnterprise: string;
+  subWebinarUsage: string;
+  subExpires: string;
+  subNoExpiry: string;
+  subExpired: string;
+  subContactUs: string;
+  subOf: string;
+  subRooms: string;
+  superAdminPanel: string;
+  subUpgrade: string;
 }> = {
   "zh-TW": {
     validationTitle: "請輸入標題",
@@ -136,6 +149,19 @@ const t: Record<LangAdmin, {
     deleteConfirm: "確定刪除",
     emptyTitle: "尚無直播間",
     emptyDesc: "建立您的第一個線上研討會",
+    subPlanLabel: "目前方案",
+    subPlanFree: "免費方案",
+    subPlanMonthly: "月租方案 ($49/月)",
+    subPlanEnterprise: "企業方案",
+    subWebinarUsage: "直播間使用",
+    subExpires: "到期日",
+    subNoExpiry: "無到期日",
+    subExpired: "已過期",
+    subContactUs: "聯繫客服升級",
+    subOf: "/",
+    subRooms: "間",
+    superAdminPanel: "使用者管理",
+    subUpgrade: "升級方案",
   },
   "zh-CN": {
     validationTitle: "请输入标题",
@@ -189,6 +215,19 @@ const t: Record<LangAdmin, {
     deleteConfirm: "确定删除",
     emptyTitle: "尚无直播间",
     emptyDesc: "创建您的第一个线上研讨会",
+    subPlanLabel: "当前方案",
+    subPlanFree: "免费方案",
+    subPlanMonthly: "月租方案 ($49/月)",
+    subPlanEnterprise: "企业方案",
+    subWebinarUsage: "直播间使用",
+    subExpires: "到期日",
+    subNoExpiry: "无到期日",
+    subExpired: "已过期",
+    subContactUs: "联系客服升级",
+    subOf: "/",
+    subRooms: "间",
+    superAdminPanel: "用户管理",
+    subUpgrade: "升级方案",
   },
 };
 
@@ -220,6 +259,18 @@ export default function AdminDashboard() {
   const { data: stats } = useQuery<WebinarStats>({
     queryKey: ["/api/webinars", "stats", "summary"],
     refetchInterval: 15000,
+  });
+
+  const { data: subscription } = useQuery<{
+    plan: string;
+    planExpiresAt: string | null;
+    maxWebinars: number;
+    webinarCount: number;
+    isActive: boolean;
+    isExpired: boolean;
+    isSuperAdmin: boolean;
+  }>({
+    queryKey: ["/api/admin/subscription"],
   });
 
   const form = useForm<WebinarForm>({
@@ -352,6 +403,12 @@ export default function AdminDashboard() {
               <Languages className="h-4 w-4 mr-1" />
               {lang === "zh-TW" ? "繁" : "简"}
             </Button>
+            {subscription?.isSuperAdmin && (
+              <Button variant="ghost" size="sm" onClick={() => setLocation("/super-admin")} data-testid="button-super-admin">
+                <Crown className="h-4 w-4 mr-1" />
+                {s.superAdminPanel}
+              </Button>
+            )}
             <Button variant="ghost" onClick={handleLogout} data-testid="button-logout">
               <LogOut className="h-4 w-4 mr-2" />
               {s.logout}
@@ -360,8 +417,37 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
+      <main className="container mx-auto px-4 py-8 space-y-6">
+        {subscription && !subscription.isSuperAdmin && (
+          <Card>
+            <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div>
+                  <span className="text-sm text-muted-foreground">{s.subPlanLabel}: </span>
+                  <Badge variant={subscription.plan === "monthly" ? "default" : subscription.plan === "enterprise" ? "secondary" : "outline"} data-testid="badge-current-plan">
+                    {subscription.plan === "monthly" ? s.subPlanMonthly : subscription.plan === "enterprise" ? s.subPlanEnterprise : s.subPlanFree}
+                  </Badge>
+                  {subscription.isExpired && <Badge variant="destructive" className="ml-2" data-testid="badge-expired">{s.subExpired}</Badge>}
+                </div>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">{s.subWebinarUsage}: </span>
+                  <span className="font-semibold" data-testid="text-webinar-usage">{subscription.webinarCount}{s.subOf}{subscription.maxWebinars} {s.subRooms}</span>
+                </div>
+                {subscription.planExpiresAt && (
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">{s.subExpires}: </span>
+                    <span data-testid="text-plan-expires">{new Date(subscription.planExpiresAt).toLocaleDateString()}</span>
+                  </div>
+                )}
+              </div>
+              {subscription.plan === "free" && (
+                <span className="text-sm text-muted-foreground">{s.subContactUs}</span>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-2xl font-bold">{s.management}</h2>
             <p className="text-muted-foreground">{s.managementDesc}</p>

@@ -362,10 +362,15 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   email: text("email").notNull().default(""),
   companyName: text("company_name").default(""),
+  subscriptionPlan: text("subscription_plan").notNull().default("free"),
+  planExpiresAt: timestamp("plan_expires_at"),
+  maxWebinars: integer("max_webinars").notNull().default(1),
+  isActive: boolean("is_active").notNull().default(true),
+  isSuperAdmin: boolean("is_super_admin").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, subscriptionPlan: true, planExpiresAt: true, maxWebinars: true, isActive: true, isSuperAdmin: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 

@@ -44,6 +44,17 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+async function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.userId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  const user = await storage.getUser(req.session.userId);
+  if (!user || !user.isSuperAdmin) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+  next();
+}
+
 async function requireWebinarOwner(req: Request, res: Response, next: NextFunction) {
   if (!req.session?.userId) {
     return res.status(401).json({ message: "Unauthorized" });
@@ -446,7 +457,7 @@ export async function registerRoutes(
         companyName: companyName || "",
       });
       req.session.userId = user.id;
-      res.json({ success: true, user: { id: user.id, username: user.username, email: user.email, companyName: user.companyName } });
+      res.json({ success: true, user: { id: user.id, username: user.username, email: user.email, companyName: user.companyName, isSuperAdmin: user.isSuperAdmin } });
     } catch (error: any) {
       res.status(500).json({ message: error.message || "註冊失敗" });
     }
@@ -458,12 +469,15 @@ export async function registerRoutes(
     if (!user) {
       return res.status(401).json({ message: "帳號或密碼錯誤" });
     }
+    if (!user.isActive) {
+      return res.status(403).json({ message: "帳號已停用，請聯繫客服" });
+    }
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
       return res.status(401).json({ message: "帳號或密碼錯誤" });
     }
     req.session.userId = user.id;
-    res.json({ success: true, user: { id: user.id, username: user.username, email: user.email, companyName: user.companyName } });
+    res.json({ success: true, user: { id: user.id, username: user.username, email: user.email, companyName: user.companyName, isSuperAdmin: user.isSuperAdmin } });
   });
 
   app.post("/api/admin/logout", (req, res) => {
@@ -475,7 +489,74 @@ export async function registerRoutes(
   app.get("/api/admin/me", requireAdmin, async (req, res) => {
     const user = await storage.getUser(req.session.userId!);
     if (!user) return res.status(401).json({ message: "Unauthorized" });
-    res.json({ id: user.id, username: user.username, email: user.email, companyName: user.companyName });
+    res.json({ id: user.id, username: user.username, email: user.email, companyName: user.companyName, isSuperAdmin: user.isSuperAdmin });
+  });
+
+  app.get("/api/admin/subscription", requireAdmin, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+      const webinarCount = await storage.getWebinarCountByUser(user.id);
+      const isExpired = user.planExpiresAt ? new Date(user.planExpiresAt) < new Date() : false;
+      res.json({
+        plan: user.subscriptionPlan,
+        planExpiresAt: user.planExpiresAt,
+        maxWebinars: user.maxWebinars,
+        webinarCount,
+        isActive: user.isActive,
+        isExpired,
+        isSuperAdmin: user.isSuperAdmin,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ============ Super Admin Routes ============
+  app.get("/api/super-admin/users", requireSuperAdmin, async (req, res) => {
+    try {
+      const allUsers = await storage.listAllUsers();
+      const usersWithCount = await Promise.all(
+        allUsers.map(async (u) => {
+          const webinarCount = await storage.getWebinarCountByUser(u.id);
+          const isExpired = u.planExpiresAt ? new Date(u.planExpiresAt) < new Date() : false;
+          return {
+            id: u.id,
+            username: u.username,
+            email: u.email,
+            companyName: u.companyName,
+            subscriptionPlan: u.subscriptionPlan,
+            planExpiresAt: u.planExpiresAt,
+            maxWebinars: u.maxWebinars,
+            isActive: u.isActive,
+            isSuperAdmin: u.isSuperAdmin,
+            createdAt: u.createdAt,
+            webinarCount,
+            isExpired,
+          };
+        })
+      );
+      res.json(usersWithCount);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/super-admin/users/:userId", requireSuperAdmin, async (req, res) => {
+    try {
+      const { subscriptionPlan, planExpiresAt, maxWebinars, isActive } = req.body;
+      const updateData: any = {};
+      if (subscriptionPlan !== undefined) updateData.subscriptionPlan = subscriptionPlan;
+      if (planExpiresAt !== undefined) updateData.planExpiresAt = planExpiresAt ? new Date(planExpiresAt) : null;
+      if (maxWebinars !== undefined) updateData.maxWebinars = maxWebinars;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      const updated = await storage.updateUser(req.params.userId, updateData);
+      if (!updated) return res.status(404).json({ message: "User not found" });
+      const webinarCount = await storage.getWebinarCountByUser(updated.id);
+      res.json({ ...updated, webinarCount });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
   });
 
   // ============ Webinar Routes ============
@@ -526,6 +607,17 @@ export async function registerRoutes(
 
   app.post("/api/webinars", requireAdmin, async (req, res) => {
     try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || !user.isActive) {
+        return res.status(403).json({ message: "帳號已停用" });
+      }
+      if (user.planExpiresAt && new Date(user.planExpiresAt) < new Date()) {
+        return res.status(403).json({ message: "訂閱方案已過期，請聯繫客服續約" });
+      }
+      const currentCount = await storage.getWebinarCountByUser(user.id);
+      if (currentCount >= user.maxWebinars) {
+        return res.status(403).json({ message: `已達方案上限（${user.maxWebinars} 個直播間），請升級方案` });
+      }
       const data = insertWebinarSchema.parse({ ...req.body, userId: req.session.userId });
       const webinar = await storage.createWebinar(data);
       res.json(webinar);

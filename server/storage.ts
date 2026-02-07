@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, lt, lte, desc, asc } from "drizzle-orm";
+import { eq, and, lt, lte, desc, asc, count } from "drizzle-orm";
 import {
   webinars, type InsertWebinar, type Webinar,
   registrations, type InsertRegistration, type Registration,
@@ -27,6 +27,9 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  listAllUsers(): Promise<User[]>;
+  updateUser(id: string, data: Partial<Omit<User, "id" | "password" | "createdAt">>): Promise<User | undefined>;
+  getWebinarCountByUser(userId: string): Promise<number>;
   
   // Webinars
   createWebinar(data: InsertWebinar): Promise<Webinar>;
@@ -141,6 +144,20 @@ export class DatabaseStorage implements IStorage {
   async createUser(data: InsertUser): Promise<User> {
     const result = await db.insert(users).values(data).returning();
     return result[0];
+  }
+
+  async listAllUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(asc(users.createdAt));
+  }
+
+  async updateUser(id: string, data: Partial<Omit<User, "id" | "password" | "createdAt">>): Promise<User | undefined> {
+    const result = await db.update(users).set(data).where(eq(users.id, id)).returning();
+    return result[0];
+  }
+
+  async getWebinarCountByUser(userId: string): Promise<number> {
+    const result = await db.select({ value: count() }).from(webinars).where(eq(webinars.userId, userId));
+    return result[0]?.value || 0;
   }
 
   // Webinars

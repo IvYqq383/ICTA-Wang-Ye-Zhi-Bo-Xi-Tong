@@ -13,6 +13,7 @@ import AdminWebinarDetail from "@/pages/admin-webinar-detail";
 import AdminControl from "@/pages/admin-control";
 import EmbedRegister from "@/pages/embed-register";
 import EmbedWebinar from "@/pages/embed-webinar";
+import SuperAdmin from "@/pages/super-admin";
 
 function Router() {
   return (
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/admin/dashboard" component={AdminDashboard} />
       <Route path="/admin/webinar/:id" component={AdminWebinarDetail} />
       <Route path="/admin/webinar/:id/control" component={AdminControl} />
+      <Route path="/super-admin" component={SuperAdmin} />
       
       {/* Landing Page */}
       <Route path="/" component={Landing} />
