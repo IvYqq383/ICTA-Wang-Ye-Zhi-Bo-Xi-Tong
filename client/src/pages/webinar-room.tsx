@@ -532,11 +532,16 @@ export default function WebinarRoom() {
           <div className="relative w-full h-full min-h-[200px] sm:min-h-[300px] lg:min-h-0">
             <iframe
               ref={iframeRef}
-              src={`https://player.vimeo.com/video/${extractVimeoId(webinar.vimeoUrl)}?autoplay=${autoplayParam}&title=0&byline=0&portrait=0`}
+              src={`https://player.vimeo.com/video/${extractVimeoId(webinar.vimeoUrl)}?autoplay=${autoplayParam}&title=0&byline=0&portrait=0&controls=0`}
               className="absolute inset-0 w-full h-full"
               allow="autoplay; fullscreen; picture-in-picture"
               allowFullScreen
               data-testid="video-player"
+            />
+            <div
+              className="absolute inset-0 z-5 cursor-default"
+              style={{ zIndex: 5, pointerEvents: "auto" }}
+              data-testid="video-overlay-block"
             />
             
             {visibleCtas.length > 0 && (
@@ -642,7 +647,7 @@ export default function WebinarRoom() {
           )}
 
           <ScrollArea className="flex-1">
-            <div className="px-3 py-2 space-y-1">
+            <div className="px-3 py-3">
               {messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
@@ -658,44 +663,38 @@ export default function WebinarRoom() {
                 const isScheduled = msg.senderType === "scheduled";
                 const initial = msg.senderName?.charAt(0)?.toUpperCase() || "?";
 
-                const avatarColor = isHost
-                  ? "bg-red-500 text-white"
-                  : isScheduled
-                  ? "bg-blue-500 text-white"
-                  : isMe
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground";
-
                 return (
                   <div
                     key={msg.id || index}
-                    className={`flex items-start gap-2 py-1.5 group ${isMe ? "flex-row-reverse" : ""}`}
+                    className={`flex items-end gap-1.5 mb-2 ${isMe ? "flex-row-reverse" : ""}`}
                     data-testid={`chat-message-${index}`}
                   >
-                    <Avatar className={`w-7 h-7 flex-shrink-0 ${avatarColor}`}>
-                      <AvatarFallback className={`text-[11px] font-semibold ${avatarColor}`}>
-                        {initial}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className={`max-w-[75%] ${isMe ? "text-right" : ""}`}>
-                      <div className={`flex items-center gap-1.5 mb-0.5 ${isMe ? "justify-end" : ""} flex-wrap`}>
-                        <span className={`text-[11px] font-semibold leading-none ${
-                          isHost ? "text-red-500" : isScheduled ? "text-blue-500" : "text-foreground"
+                    {!isMe && (
+                      <Avatar className={`w-6 h-6 flex-shrink-0 ${
+                        isHost ? "bg-red-500 text-white" : isScheduled ? "bg-blue-500 text-white" : "bg-muted text-muted-foreground"
+                      }`}>
+                        <AvatarFallback className={`text-[10px] font-semibold ${
+                          isHost ? "bg-red-500 text-white" : isScheduled ? "bg-blue-500 text-white" : "bg-muted text-muted-foreground"
+                        }`}>
+                          {initial}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+                    <div className={`max-w-[75%] ${isMe ? "items-end" : "items-start"} flex flex-col`}>
+                      {!isMe && (
+                        <span className={`text-[10px] font-medium mb-0.5 px-2 leading-none ${
+                          isHost ? "text-red-500" : isScheduled ? "text-blue-500" : "text-muted-foreground"
                         }`}>
                           {msg.senderName}
+                          {isHost && " ・主辦"}
                         </span>
-                        {isHost && (
-                          <Badge variant="destructive" className="text-[9px] px-1 py-0 leading-tight">
-                            主辦
-                          </Badge>
-                        )}
-                      </div>
-                      <div className={`inline-block rounded-2xl px-3 py-1.5 text-sm leading-relaxed break-words ${
+                      )}
+                      <div className={`inline-block px-3 py-2 text-[13px] leading-relaxed break-words ${
                         isMe
-                          ? "bg-primary text-primary-foreground rounded-tr-sm"
+                          ? "bg-primary text-primary-foreground rounded-2xl rounded-br-sm"
                           : isHost
-                          ? "bg-red-50 dark:bg-red-950/30 text-foreground rounded-tl-sm"
-                          : "bg-muted text-foreground rounded-tl-sm"
+                          ? "bg-red-500/10 dark:bg-red-500/20 text-foreground rounded-2xl rounded-bl-sm"
+                          : "bg-muted text-foreground rounded-2xl rounded-bl-sm"
                       }`}>
                         {msg.message}
                       </div>
