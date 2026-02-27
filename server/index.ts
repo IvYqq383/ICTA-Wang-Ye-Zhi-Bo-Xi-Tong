@@ -7,6 +7,8 @@ import { createServer } from "http";
 import { runMigrations } from "stripe-replit-sync";
 import { getStripeSync } from "./stripeClient";
 import { WebhookHandlers } from "./webhookHandlers";
+import bcrypt from "bcryptjs";
+import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
@@ -131,6 +133,30 @@ app.use((req, res, next) => {
     }
   } catch (error) {
     console.error('Failed to initialize Stripe:', error);
+  }
+
+  try {
+    const existingAdmin = await storage.getUserByUsername("admin");
+    if (!existingAdmin) {
+      const hashedPassword = await bcrypt.hash("aa3210", 10);
+      await storage.createUser({
+        username: "admin",
+        password: hashedPassword,
+        email: "admin@icta-webinar.com",
+        companyName: "ICTA",
+      });
+      const created = await storage.getUserByUsername("admin");
+      if (created) {
+        await storage.updateUser(created.id, {
+          isSuperAdmin: true,
+          subscriptionPlan: "enterprise",
+          maxWebinars: 999,
+        });
+      }
+      log("Default admin account created (admin / aa3210)", "seed");
+    }
+  } catch (err) {
+    console.error("Failed to seed admin account:", err);
   }
 
   await registerRoutes(httpServer, app);
