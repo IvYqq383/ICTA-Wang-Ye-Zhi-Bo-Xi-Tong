@@ -185,6 +185,8 @@ export default function WebinarRoom() {
           player.setCurrentTime(savedProgress.lastPosition).catch(() => {});
         }
 
+        player.play().catch(() => {});
+
         player.on("timeupdate", (data: { seconds: number }) => {
           setCurrentTime(Math.floor(data.seconds));
         });
@@ -406,8 +408,16 @@ export default function WebinarRoom() {
   };
 
   const extractVimeoId = (url: string) => {
-    const match = url.match(/vimeo\.com\/(\d+)/);
-    return match ? match[1] : url;
+    const trimmed = url.trim();
+    if (/^\d+$/.test(trimmed)) return trimmed;
+    const match = trimmed.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    return match ? match[1] : trimmed;
+  };
+
+  const extractVimeoHash = (url: string) => {
+    const trimmed = url.trim();
+    const match = trimmed.match(/vimeo\.com\/(?:video\/)?(\d+)\/([a-f0-9]+)/);
+    return match ? match[2] : null;
   };
 
   const formatStartTime = (date: Date | string) => {
@@ -532,17 +542,19 @@ export default function WebinarRoom() {
           <div className="relative w-full h-full min-h-[200px] sm:min-h-[300px] lg:min-h-0">
             <iframe
               ref={iframeRef}
-              src={`https://player.vimeo.com/video/${extractVimeoId(webinar.vimeoUrl)}?autoplay=${autoplayParam}&title=0&byline=0&portrait=0&controls=0`}
+              src={`https://player.vimeo.com/video/${extractVimeoId(webinar.vimeoUrl)}?${extractVimeoHash(webinar.vimeoUrl) ? `h=${extractVimeoHash(webinar.vimeoUrl)}&` : ""}autoplay=${autoplayParam}&title=0&byline=0&portrait=0&controls=0`}
               className="absolute inset-0 w-full h-full"
               allow="autoplay; fullscreen; picture-in-picture"
               allowFullScreen
               data-testid="video-player"
             />
-            <div
-              className="absolute inset-0 z-5 cursor-default"
-              style={{ zIndex: 5, pointerEvents: "auto" }}
-              data-testid="video-overlay-block"
-            />
+            {isPlaying && (
+              <div
+                className="absolute inset-0 z-5 cursor-default"
+                style={{ zIndex: 5, pointerEvents: "auto" }}
+                data-testid="video-overlay-block"
+              />
+            )}
             
             {visibleCtas.length > 0 && (
               <div className="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 right-2 sm:right-4 flex flex-col gap-1.5 sm:gap-2 z-10">
