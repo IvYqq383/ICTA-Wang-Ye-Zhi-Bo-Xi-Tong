@@ -611,7 +611,7 @@ export default function WebinarRoom() {
             </div>
             
             {visibleTip && (
-              <div className="absolute top-4 right-2 sm:right-4 z-20 max-w-[200px] sm:max-w-xs animate-in slide-in-from-right duration-300" data-testid="tip-card">
+              <div className="hidden lg:block absolute top-4 right-4 z-20 max-w-xs animate-in slide-in-from-right duration-300" data-testid="tip-card-desktop">
                 <Card className="bg-white/95 dark:bg-card/95 backdrop-blur shadow-lg">
                   <CardContent className="p-3">
                     <div className="flex items-start gap-2">
@@ -650,6 +650,31 @@ export default function WebinarRoom() {
             )}
           </div>
         </div>
+
+        {visibleTip && (
+          <div className="lg:hidden px-3 py-2 border-b bg-background animate-in slide-in-from-top duration-300" data-testid="tip-card-mobile">
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="p-3">
+                <div className="flex items-start gap-2">
+                  <Info className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-medium text-sm">{visibleTip.title}</h4>
+                    <p className="text-xs text-muted-foreground mt-1 break-words">{visibleTip.content}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 flex-shrink-0"
+                    onClick={() => setVisibleTip(null)}
+                    data-testid="button-close-tip-mobile"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         <div className="w-full lg:w-[380px] flex flex-col border-l bg-background flex-1 lg:flex-none lg:h-full min-h-0 relative">
           <div className="px-4 py-3 border-b flex items-center justify-between gap-2 bg-card">
