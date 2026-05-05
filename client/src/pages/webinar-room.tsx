@@ -369,7 +369,6 @@ export default function WebinarRoom() {
       }
     }));
     setMessageInput("");
-    setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   const sendLike = () => {
@@ -539,9 +538,9 @@ export default function WebinarRoom() {
           <span className="ml-3 text-sm font-medium truncate">{webinar.title}</span>
         </div>
       )}
-      <div className={`flex flex-col lg:flex-row ${brandSettings?.logo ? "h-[calc(100vh-2.5rem)]" : "h-screen"}`}>
-        <div className="flex-1 relative bg-black min-h-0">
-          <div className="relative w-full h-full min-h-[200px] sm:min-h-[300px] lg:min-h-0">
+      <div className={`flex flex-col lg:flex-row ${brandSettings?.logo ? "h-[calc(100dvh-2.5rem)]" : "h-[100dvh]"}`}>
+        <div className="relative bg-black w-full aspect-video lg:aspect-auto lg:flex-1 lg:h-full lg:min-h-0">
+          <div className="relative w-full h-full">
             <iframe
               ref={iframeRef}
               src={`https://player.vimeo.com/video/${extractVimeoId(webinar.vimeoUrl)}?${extractVimeoHash(webinar.vimeoUrl) ? `h=${extractVimeoHash(webinar.vimeoUrl)}&` : ""}autoplay=${autoplayParam}&title=0&byline=0&portrait=0&controls=0`}
@@ -640,7 +639,7 @@ export default function WebinarRoom() {
           </div>
         </div>
 
-        <div className="w-full lg:w-[380px] flex flex-col border-l bg-background h-[45vh] sm:h-[50vh] lg:h-full relative">
+        <div className="w-full lg:w-[380px] flex flex-col border-l bg-background flex-1 lg:flex-none lg:h-full min-h-0 relative">
           <div className="px-4 py-3 border-b flex items-center justify-between gap-2 bg-card">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-sm">即時聊天</span>
@@ -757,11 +756,12 @@ export default function WebinarRoom() {
                 data-testid="input-chat-message"
               />
               <Button
+                type="button"
                 onClick={sendMessage}
-                size="icon"
                 disabled={!messageInput.trim()}
-                className="rounded-full flex-shrink-0"
+                className="rounded-full flex-shrink-0 h-10 w-10 p-0"
                 data-testid="button-send-message"
+                aria-label="送出訊息"
               >
                 <Send className="w-4 h-4" />
               </Button>
