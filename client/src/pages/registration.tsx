@@ -112,6 +112,17 @@ export default function Registration() {
     return `${yyyy}/${mm}/${dd} 星期${weekday} ${hh}:${min}`;
   };
 
+  useEffect(() => {
+    if (
+      availableSessions &&
+      availableSessions.sessions.length === 1 &&
+      availableSessions.mode !== "onDemand" &&
+      !selectedSession
+    ) {
+      setSelectedSession(availableSessions.sessions[0].scheduledStart);
+    }
+  }, [availableSessions, selectedSession]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center">
@@ -152,17 +163,6 @@ export default function Registration() {
   const mode = availableSessions?.mode || "fixed";
   const hasSessions = availableSessions?.hasSessions || false;
   const showSessionPicker = hasSessions && availableSessions && availableSessions.sessions.length >= 1 && mode !== "onDemand";
-
-  useEffect(() => {
-    if (
-      availableSessions &&
-      availableSessions.sessions.length === 1 &&
-      mode !== "onDemand" &&
-      !selectedSession
-    ) {
-      setSelectedSession(availableSessions.sessions[0].scheduledStart);
-    }
-  }, [availableSessions, mode, selectedSession]);
   const showSelectedTime = selectedSession || mode === "onDemand" || (mode === "fixed" && !showSessionPicker);
 
   if (registered) {
