@@ -60,7 +60,7 @@ async function requireWebinarOwner(req: Request, res: Response, next: NextFuncti
   if (!req.session?.userId) {
     return res.status(401).json({ message: "Unauthorized" });
   }
-  const webinarId = req.params.id;
+  const webinarId = req.params.id as string | undefined;
   if (webinarId) {
     const webinar = await storage.getWebinar(webinarId);
     if (!webinar || webinar.userId !== req.session.userId) {
@@ -555,7 +555,7 @@ export async function registerRoutes(
       if (planExpiresAt !== undefined) updateData.planExpiresAt = planExpiresAt ? new Date(planExpiresAt) : null;
       if (maxWebinars !== undefined) updateData.maxWebinars = maxWebinars;
       if (isActive !== undefined) updateData.isActive = isActive;
-      const updated = await storage.updateUser(req.params.userId, updateData);
+      const updated = await storage.updateUser(req.params.userId as string, updateData);
       if (!updated) return res.status(404).json({ message: "User not found" });
       const webinarCount = await storage.getWebinarCountByUser(updated.id);
       res.json({ ...updated, webinarCount });
@@ -1204,7 +1204,7 @@ export async function registerRoutes(
 
   app.delete("/api/webinars/:id/sessions/:sessionId", requireWebinarOwner, async (req, res) => {
     try {
-      await storage.deleteWebinarSession(req.params.sessionId);
+      await storage.deleteWebinarSession(req.params.sessionId as string);
       res.json({ success: true });
     } catch (error: any) {
       res.status(400).json({ message: error.message });

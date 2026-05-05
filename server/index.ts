@@ -136,24 +136,30 @@ app.use((req, res, next) => {
   }
 
   try {
-    const existingAdmin = await storage.getUserByUsername("admin");
-    if (!existingAdmin) {
+    let adminUser = await storage.getUserByUsername("admin");
+    if (!adminUser) {
       const hashedPassword = await bcrypt.hash("aa3210", 10);
-      await storage.createUser({
-        username: "admin",
-        password: hashedPassword,
-        email: "admin@icta-webinar.com",
-        companyName: "ICTA",
-      });
-      const created = await storage.getUserByUsername("admin");
-      if (created) {
-        await storage.updateUser(created.id, {
-          isSuperAdmin: true,
-          subscriptionPlan: "enterprise",
-          maxWebinars: 999,
+      try {
+        await storage.createUser({
+          username: "admin",
+          password: hashedPassword,
+          email: "admin@icta-webinar.com",
+          companyName: "ICTA",
         });
+        log("Default admin account created (admin / aa3210)", "seed");
+      } catch (insertErr: any) {
+        if (!String(insertErr?.message || "").toLowerCase().includes("unique")) {
+          throw insertErr;
+        }
       }
-      log("Default admin account created (admin / aa3210)", "seed");
+      adminUser = await storage.getUserByUsername("admin");
+    }
+    if (adminUser && (!adminUser.isSuperAdmin || adminUser.subscriptionPlan !== "enterprise")) {
+      await storage.updateUser(adminUser.id, {
+        isSuperAdmin: true,
+        subscriptionPlan: "enterprise",
+        maxWebinars: 999,
+      });
     }
   } catch (err) {
     console.error("Failed to seed admin account:", err);

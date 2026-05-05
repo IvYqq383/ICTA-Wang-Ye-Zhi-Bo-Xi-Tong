@@ -409,8 +409,18 @@ export default function WebinarRoom() {
   const extractVimeoId = (url: string) => {
     const trimmed = url.trim();
     if (/^\d+$/.test(trimmed)) return trimmed;
-    const match = trimmed.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-    return match ? match[1] : trimmed;
+    const patterns = [
+      /(?:player\.)?vimeo\.com\/video\/(\d+)/,
+      /vimeo\.com\/channels\/[^/]+\/(\d+)/,
+      /vimeo\.com\/groups\/[^/]+\/videos\/(\d+)/,
+      /vimeo\.com\/ondemand\/[^/]+\/(\d+)/,
+      /vimeo\.com\/(\d+)/,
+    ];
+    for (const pattern of patterns) {
+      const match = trimmed.match(pattern);
+      if (match) return match[1];
+    }
+    return trimmed;
   };
 
   const extractVimeoHash = (url: string) => {
