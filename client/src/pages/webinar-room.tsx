@@ -292,7 +292,11 @@ export default function WebinarRoom() {
       
       switch (msg.type) {
         case "chat":
-          setMessages((prev) => [...prev, msg.data]);
+          setMessages((prev) => {
+            const incoming = msg.data;
+            if (incoming?.id && prev.some((m) => m.id === incoming.id)) return prev;
+            return [...prev, incoming];
+          });
           break;
         case "like":
           setLikeCount(msg.data.count);

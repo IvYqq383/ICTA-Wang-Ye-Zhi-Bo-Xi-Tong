@@ -159,20 +159,28 @@ export default function AdminControl() {
       switch (msg.type) {
         case "chat": {
           const chatMsg = msg.data as ChatMessage & { sessionId?: string };
-          setAllMessages((prev) => [...prev, chatMsg]);
+          setAllMessages((prev) => {
+            if (chatMsg.id && prev.some((m) => m.id === chatMsg.id)) return prev;
+            return [...prev, chatMsg];
+          });
           
-          if (chatMsg.sessionId && chatMsg.senderType === "viewer") {
+          if (chatMsg.sessionId && (chatMsg.senderType === "viewer" || chatMsg.senderType === "host")) {
             setViewerSessions((prev) => {
               const updated = new Map(prev);
               const existing = updated.get(chatMsg.sessionId!) || {
                 sessionId: chatMsg.sessionId!,
-                nickname: chatMsg.senderName,
+                nickname: chatMsg.senderType === "viewer" ? chatMsg.senderName : "觀眾",
                 messages: [],
                 lastActivity: new Date()
               };
+              if (chatMsg.id && existing.messages.some((m) => m.id === chatMsg.id)) {
+                return prev;
+              }
               existing.messages = [...existing.messages, chatMsg];
               existing.lastActivity = new Date();
-              existing.nickname = chatMsg.senderName;
+              if (chatMsg.senderType === "viewer") {
+                existing.nickname = chatMsg.senderName;
+              }
               updated.set(chatMsg.sessionId!, existing);
               return updated;
             });
