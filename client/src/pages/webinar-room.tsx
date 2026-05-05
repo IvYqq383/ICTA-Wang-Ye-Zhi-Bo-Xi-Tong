@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Heart, Send, Users, Loader2, ExternalLink, X, Info, Star, Clock } from "lucide-react";
+import { Heart, Send, Users, Loader2, ExternalLink, X, Info, Star, Clock, Play } from "lucide-react";
 import type { Webinar, ChatMessage, CtaButton, Poll, ScheduledMessage, Tip, FakeUser, FeedbackSurvey } from "@shared/schema";
 
 interface WebSocketMessage {
@@ -416,8 +416,10 @@ export default function WebinarRoom() {
 
   const extractVimeoHash = (url: string) => {
     const trimmed = url.trim();
-    const match = trimmed.match(/vimeo\.com\/(?:video\/)?(\d+)\/([a-f0-9]+)/);
-    return match ? match[2] : null;
+    const queryMatch = trimmed.match(/[?&]h=([a-zA-Z0-9]+)/);
+    if (queryMatch) return queryMatch[1];
+    const pathMatch = trimmed.match(/vimeo\.com\/(?:video\/)?\d+\/([a-zA-Z0-9]+)/);
+    return pathMatch ? pathMatch[1] : null;
   };
 
   const formatStartTime = (date: Date | string) => {
@@ -548,12 +550,29 @@ export default function WebinarRoom() {
               allowFullScreen
               data-testid="video-player"
             />
-            {isPlaying && (
+            {isPlaying ? (
               <div
-                className="absolute inset-0 z-5 cursor-default"
+                className="absolute inset-0 cursor-default"
                 style={{ zIndex: 5, pointerEvents: "auto" }}
                 data-testid="video-overlay-block"
               />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (playerRef.current) {
+                    playerRef.current.play().catch(() => {});
+                  }
+                }}
+                className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/30 transition-colors group"
+                style={{ zIndex: 5 }}
+                data-testid="button-play-video"
+                aria-label="播放影片"
+              >
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-white/95 group-hover:bg-white flex items-center justify-center shadow-2xl transition-all group-hover:scale-110">
+                  <Play className="w-10 h-10 sm:w-12 sm:h-12 text-slate-900 fill-slate-900 ml-1" />
+                </div>
+              </button>
             )}
             
             {visibleCtas.length > 0 && (
