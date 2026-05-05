@@ -185,8 +185,6 @@ export default function WebinarRoom() {
           player.setCurrentTime(savedProgress.lastPosition).catch(() => {});
         }
 
-        player.play().catch(() => {});
-
         player.on("timeupdate", (data: { seconds: number }) => {
           setCurrentTime(Math.floor(data.seconds));
         });
@@ -568,10 +566,14 @@ export default function WebinarRoom() {
             ) : (
               <button
                 type="button"
-                onClick={() => {
-                  if (playerRef.current) {
-                    playerRef.current.play().catch(() => {});
-                  }
+                onClick={async () => {
+                  const player = playerRef.current;
+                  if (!player) return;
+                  try {
+                    await player.setMuted(false);
+                    await player.setVolume(1);
+                  } catch {}
+                  player.play().catch(() => {});
                 }}
                 className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/30 transition-colors group"
                 style={{ zIndex: 5 }}
