@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -151,7 +151,18 @@ export default function Registration() {
 
   const mode = availableSessions?.mode || "fixed";
   const hasSessions = availableSessions?.hasSessions || false;
-  const showSessionPicker = hasSessions && availableSessions && availableSessions.sessions.length > 1;
+  const showSessionPicker = hasSessions && availableSessions && availableSessions.sessions.length >= 1 && mode !== "onDemand";
+
+  useEffect(() => {
+    if (
+      availableSessions &&
+      availableSessions.sessions.length === 1 &&
+      mode !== "onDemand" &&
+      !selectedSession
+    ) {
+      setSelectedSession(availableSessions.sessions[0].scheduledStart);
+    }
+  }, [availableSessions, mode, selectedSession]);
   const showSelectedTime = selectedSession || mode === "onDemand" || (mode === "fixed" && !showSessionPicker);
 
   if (registered) {
@@ -171,17 +182,22 @@ export default function Registration() {
             <p className="text-muted-foreground mb-6">
               我們已將直播連結發送至您的 Email，請在直播時間準時加入。
             </p>
-            <div className="bg-muted rounded-md p-4 mb-6">
-              <h3 className="font-semibold mb-2">{webinar.title}</h3>
+            <div className="bg-muted rounded-md p-4 mb-6 text-left">
+              <h3 className="font-semibold mb-3 text-center">{webinar.title}</h3>
               {mode === "onDemand" ? (
-                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                  <Play className="h-4 w-4" />
+                <div className="flex items-center justify-center gap-2 text-sm">
+                  <Play className="h-4 w-4 text-green-600" />
                   <span>隨時可以觀看</span>
                 </div>
               ) : (
-                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="h-4 w-4" />
-                  <span>{selectedSession ? formatDate(selectedSession) : formatDate(webinar.startTime)}</span>
+                <div className="border border-primary/30 bg-primary/5 rounded-md p-3" data-testid="card-selected-session">
+                  <div className="text-xs text-muted-foreground mb-1">您報名的場次</div>
+                  <div className="flex items-center gap-2 font-medium">
+                    <Calendar className="h-4 w-4 text-primary flex-shrink-0" />
+                    <span data-testid="text-selected-session-date">
+                      {selectedSession ? formatSessionOption(selectedSession) : formatDate(webinar.startTime)}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
