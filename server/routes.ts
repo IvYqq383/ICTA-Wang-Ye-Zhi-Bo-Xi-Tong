@@ -241,13 +241,42 @@ export async function registerRoutes(
           
           case "chat": {
             const { webinarId, sessionId, senderName, message: chatMessage, senderType } = message.data;
-            
+
+            // Host broadcast: requires server-verified host connection. Persist a single
+            // canonical row (sessionId=null) and fan-out via WS to every connected viewer.
+            // Per-session history reads include sessionId=null host rows, so reloads work.
+            if (!sessionId) {
+              if (!isHost) break; // reject impersonation from viewer sockets
+              const saved = await storage.createChatMessage({
+                webinarId,
+                sessionId: null,
+                senderName,
+                message: chatMessage,
+                senderType: "host",
+                isPrivate: false,
+              });
+              const sessions = webinarSessions.get(webinarId);
+              if (sessions) {
+                const payload = JSON.stringify({ type: "chat", data: saved });
+                sessions.forEach(sid => {
+                  const vws = sessionConnections.get(sid);
+                  if (vws && vws.readyState === WebSocket.OPEN) {
+                    vws.send(payload);
+                  }
+                });
+              }
+              broadcastToHosts(webinarId, { type: "chat", data: saved }, ws);
+              break;
+            }
+
+            // Viewer sockets cannot impersonate as host on session-tagged chat
+            const safeSenderType = (!isHost && senderType === "host") ? "viewer" : (senderType || "viewer");
             const savedMessage = await storage.createChatMessage({
               webinarId,
               sessionId,
               senderName,
               message: chatMessage,
-              senderType: senderType || "viewer",
+              senderType: safeSenderType,
               isPrivate: true
             });
             
@@ -267,6 +296,7 @@ export async function registerRoutes(
           }
           
           case "hostReply": {
+            if (!isHost) break; // only verified host sockets may reply as host
             const { webinarId, sessionId, senderName, message: chatMessage } = message.data;
             
             const savedMessage = await storage.createChatMessage({
@@ -1301,7 +1331,49 @@ export async function registerRoutes(
       if (!webinar) return res.status(404).json({ message: "Webinar not found" });
 
       const scheduleMode = webinar.scheduleMode as any;
+      const recurring = webinar.recurringSchedule as any;
       const now = new Date();
+
+      // If a recurring schedule (days+times) is configured, always offer those
+      // upcoming time slots as pickable sessions — even when scheduleMode says
+      // onDemand — so viewers can register for a specific airing.
+      if (recurring?.enabled && recurring.times?.length && recurring.days?.length) {
+        const excludeSet = new Set<string>(
+          (recurring.excludeDates as string[] | undefined)?.map(d => String(d).slice(0, 10)) || []
+        );
+        const generated: { id: string; scheduledStart: Date; status: string }[] = [];
+        for (let d = 0; d < 14 && generated.length < 20; d++) {
+          const date = new Date(now);
+          date.setDate(date.getDate() + d);
+          if (!recurring.days.includes(date.getDay())) continue;
+          const ymd = date.toISOString().slice(0, 10);
+          if (excludeSet.has(ymd)) continue;
+          for (const time of recurring.times as string[]) {
+            const match = /^(\d{1,2}):(\d{2})$/.exec(String(time).trim());
+            if (!match) continue;
+            const h = Number(match[1]);
+            const m = Number(match[2]);
+            if (h < 0 || h > 23 || m < 0 || m > 59) continue;
+            const slot = new Date(date);
+            slot.setHours(h, m, 0, 0);
+            if (slot.getTime() <= now.getTime()) continue;
+            generated.push({
+              id: `recurring-${slot.getTime()}`,
+              scheduledStart: slot,
+              status: "scheduled",
+            });
+            if (generated.length >= 20) break;
+          }
+        }
+        generated.sort((a, b) => a.scheduledStart.getTime() - b.scheduledStart.getTime());
+        if (generated.length > 0) {
+          return res.json({
+            mode: "recurring",
+            sessions: generated,
+            hasSessions: true,
+          });
+        }
+      }
 
       if (scheduleMode?.onDemand) {
         return res.json({

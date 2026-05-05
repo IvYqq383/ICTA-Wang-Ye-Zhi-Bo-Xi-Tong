@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, lt, lte, desc, asc, count } from "drizzle-orm";
+import { eq, and, lt, lte, desc, asc, count, isNull, or } from "drizzle-orm";
 import {
   webinars, type InsertWebinar, type Webinar,
   registrations, type InsertRegistration, type Registration,
@@ -471,12 +471,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getChatMessagesBySession(webinarId: string, sessionId: string): Promise<ChatMessage[]> {
-    // Return only messages for this specific session (viewer's own messages + host replies to them)
+    // Viewer's own messages + host replies to them + canonical host broadcasts (sessionId=null, public)
     return db.select().from(chatMessages)
       .where(
         and(
           eq(chatMessages.webinarId, webinarId),
-          eq(chatMessages.sessionId, sessionId)
+          or(
+            eq(chatMessages.sessionId, sessionId),
+            and(isNull(chatMessages.sessionId), eq(chatMessages.isPrivate, false))
+          )
         )
       )
       .orderBy(asc(chatMessages.sentAt));

@@ -540,7 +540,7 @@ export default function WebinarRoom() {
   const surveyQuestions = feedbackSurvey?.questions as { id: string; type: string; question: string; options?: string[]; required: boolean }[] || [];
 
   const brandAccentStyle = brandSettings?.primaryColor ? { borderColor: brandSettings.primaryColor } : {};
-  const autoplayParam = isOnDemand ? "1" : "0";
+  const autoplayParam = "0";
 
   return (
     <div className="min-h-screen bg-background">
