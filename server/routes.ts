@@ -242,35 +242,31 @@ export async function registerRoutes(
           case "chat": {
             const { webinarId, sessionId, senderName, message: chatMessage, senderType } = message.data;
             
-            // Save message with session ID (private to this viewer)
             const savedMessage = await storage.createChatMessage({
               webinarId,
               sessionId,
               senderName,
               message: chatMessage,
               senderType: senderType || "viewer",
-              isPrivate: true // Viewer messages are private
+              isPrivate: true
             });
             
-            // Send ONLY to this viewer's session (not other viewers)
             const viewerWs = sessionConnections.get(sessionId);
-            if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
+            if (viewerWs && viewerWs.readyState === WebSocket.OPEN && viewerWs !== ws) {
               viewerWs.send(JSON.stringify({
                 type: "chat",
                 data: savedMessage
               }));
             }
             
-            // Also send to hosts so they can see all conversations
             broadcastToHosts(webinarId, {
               type: "chat",
               data: { ...savedMessage, sessionId }
-            });
+            }, ws);
             break;
           }
           
           case "hostReply": {
-            // Host replying to a specific viewer's session
             const { webinarId, sessionId, senderName, message: chatMessage } = message.data;
             
             const savedMessage = await storage.createChatMessage({
@@ -282,20 +278,18 @@ export async function registerRoutes(
               isPrivate: true
             });
             
-            // Send to the specific viewer
             const viewerWs = sessionConnections.get(sessionId);
-            if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
+            if (viewerWs && viewerWs.readyState === WebSocket.OPEN && viewerWs !== ws) {
               viewerWs.send(JSON.stringify({
                 type: "chat",
                 data: savedMessage
               }));
             }
             
-            // Also send to all hosts
             broadcastToHosts(webinarId, {
               type: "chat",
               data: { ...savedMessage, sessionId }
-            });
+            }, ws);
             break;
           }
           
@@ -424,12 +418,12 @@ export async function registerRoutes(
     }
   }
 
-  function broadcastToHosts(webinarId: string, message: any) {
+  function broadcastToHosts(webinarId: string, message: any, excludeWs?: WebSocket) {
     const connections = hostConnections.get(webinarId);
     if (connections) {
       const data = JSON.stringify(message);
       connections.forEach(ws => {
-        if (ws.readyState === WebSocket.OPEN) {
+        if (ws !== excludeWs && ws.readyState === WebSocket.OPEN) {
           ws.send(data);
         }
       });

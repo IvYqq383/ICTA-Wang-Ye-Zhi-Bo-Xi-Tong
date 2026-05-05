@@ -233,16 +233,29 @@ export default function AdminControl() {
 
   const sendBroadcastMessage = () => {
     if (!messageInput.trim() || !wsRef.current) return;
+    const text = messageInput.trim();
     
     wsRef.current.send(JSON.stringify({
       type: "chat",
       data: {
         webinarId: id,
         senderName: hostName,
-        message: messageInput.trim(),
+        message: text,
         senderType: "host"
       }
     }));
+    
+    const localMsg: ChatMessage = {
+      id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      webinarId: id!,
+      sessionId: null,
+      senderName: hostName,
+      message: text,
+      senderType: "host",
+      sentAt: new Date(),
+      isPrivate: false,
+    };
+    setAllMessages((prev) => [...prev, localMsg]);
     
     setMessageInput("");
     toast({ title: s.toastBroadcast });
@@ -250,6 +263,7 @@ export default function AdminControl() {
 
   const sendReplyToSession = () => {
     if (!messageInput.trim() || !wsRef.current || !selectedSession) return;
+    const text = messageInput.trim();
     
     wsRef.current.send(JSON.stringify({
       type: "hostReply",
@@ -257,9 +271,31 @@ export default function AdminControl() {
         webinarId: id,
         sessionId: selectedSession,
         senderName: hostName,
-        message: messageInput.trim()
+        message: text
       }
     }));
+    
+    const localMsg: ChatMessage & { sessionId: string } = {
+      id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      webinarId: id!,
+      sessionId: selectedSession,
+      senderName: hostName,
+      message: text,
+      senderType: "host",
+      sentAt: new Date(),
+      isPrivate: true,
+    };
+    setAllMessages((prev) => [...prev, localMsg]);
+    setViewerSessions((prev) => {
+      const updated = new Map(prev);
+      const existing = updated.get(selectedSession);
+      if (existing) {
+        existing.messages = [...existing.messages, localMsg];
+        existing.lastActivity = new Date();
+        updated.set(selectedSession, existing);
+      }
+      return updated;
+    });
     
     setMessageInput("");
     toast({ title: s.toastReply });
