@@ -181,9 +181,26 @@ export default function WebinarRoom() {
         const player = new (window as any).Vimeo.Player(iframeRef.current);
         playerRef.current = player;
 
-        if (savedProgress && savedProgress.lastPosition > 0) {
-          player.setCurrentTime(savedProgress.lastPosition).catch(() => {});
-        }
+        // Simulated-live: seek to where the show would be NOW based on the viewer's
+        // first-join time. Leaving & returning lands at the live-equivalent position
+        // (the show kept "airing" while they were away), not back at the start.
+        try {
+          const startKey = `liveStart_${id}_${sessionId}`;
+          let startedAt = Number(localStorage.getItem(startKey) || 0);
+          if (!startedAt) {
+            startedAt = Date.now();
+            localStorage.setItem(startKey, String(startedAt));
+          }
+          const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+          if (elapsed > 1) {
+            player.getDuration().then((dur: number) => {
+              const target = dur > 0 ? Math.min(elapsed, Math.max(0, dur - 2)) : elapsed;
+              player.setCurrentTime(target).catch(() => {});
+            }).catch(() => {
+              player.setCurrentTime(elapsed).catch(() => {});
+            });
+          }
+        } catch {}
 
         player.on("timeupdate", (data: { seconds: number }) => {
           setCurrentTime(Math.floor(data.seconds));
