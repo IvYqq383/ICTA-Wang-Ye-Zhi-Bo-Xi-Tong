@@ -226,3 +226,7 @@ npm run build        # 建置生產版本
 ## 整合服務
 - Gmail API - 發送報名通知郵件（透過 Replit 連接器）
 - Vimeo Player API - 影片播放控制
+
+## User preferences
+- 溝通語言：繁體中文（zh-TW），非技術用戶。
+- 回覆風格：精簡模式（caveman style）。回話短、重點優先、去除客套廢話，但技術內容、程式碼、指令保持完整準確。
