@@ -37,6 +37,7 @@ export default function EmbedWebinar() {
 
   const [likeCount, setLikeCount] = useState(0);
   const [visibleCtas, setVisibleCtas] = useState<CtaButton[]>([]);
+  const [liveCtas, setLiveCtas] = useState<CtaButton[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const [viewerCount, setViewerCount] = useState(1);
@@ -85,6 +86,15 @@ export default function EmbedWebinar() {
         case "viewerCount":
           setViewerCount(msg.data.count);
           break;
+        case "liveCta": {
+          const cta = { ...msg.data, startTime: 0, endTime: null } as CtaButton;
+          setLiveCtas(prev => [...prev.filter(c => c.id !== cta.id), cta]);
+          if (msg.data.expiresAt) {
+            const ms = msg.data.expiresAt - Date.now();
+            if (ms > 0) setTimeout(() => setLiveCtas(prev => prev.filter(c => c.id !== cta.id)), ms);
+          }
+          break;
+        }
       }
     };
     ws.onclose = () => {
@@ -224,7 +234,7 @@ export default function EmbedWebinar() {
             allowFullScreen
           />
         </div>
-        {visibleCtas.map(cta => (
+        {[...visibleCtas, ...liveCtas].map(cta => (
           <div key={cta.id} className="absolute bottom-2 left-1/2 transform -translate-x-1/2 z-10">
             <a href={cta.url} target="_blank" rel="noopener noreferrer">
               <Button size="sm">

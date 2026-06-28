@@ -51,6 +51,30 @@ const t: Record<LangAdmin, Record<string, string>> = {
     likeCount: "按讚數",
     messageTotal: "訊息數",
     notFound: "找不到此直播間",
+    studio: "導播台（一鍵推送）",
+    studioHint: "邊看影片邊即時推送，立即顯示給所有觀眾",
+    videoPreview: "影片預覽",
+    quickCta: "快速 CTA 按鈕",
+    ctaText: "按鈕文字",
+    ctaUrl: "連結網址",
+    ctaStyle: "樣式",
+    stylePrimary: "主要",
+    styleSecondary: "次要",
+    styleDanger: "強調",
+    durationSec: "顯示秒數（留空＝持續）",
+    pushNow: "立即顯示",
+    quickTip: "快速小提示卡",
+    tipTitle: "標題",
+    tipContent: "內容",
+    quickChat: "快速假人聊天",
+    chatName: "暱稱",
+    pickFakeUser: "選假人",
+    chatMessage: "訊息內容",
+    sendChat: "發送到聊天室",
+    toastCtaPushed: "CTA 已顯示給所有觀眾",
+    toastTipPushed: "小提示卡已顯示給所有觀眾",
+    toastChatPushed: "假人訊息已發送",
+    fillRequired: "請填寫必填欄位",
   },
   "zh-CN": {
     defaultHostName: "主办人",
@@ -88,6 +112,30 @@ const t: Record<LangAdmin, Record<string, string>> = {
     likeCount: "点赞数",
     messageTotal: "消息数",
     notFound: "找不到此直播间",
+    studio: "导播台（一键推送）",
+    studioHint: "边看视频边实时推送，立即显示给所有观众",
+    videoPreview: "视频预览",
+    quickCta: "快速 CTA 按钮",
+    ctaText: "按钮文字",
+    ctaUrl: "链接网址",
+    ctaStyle: "样式",
+    stylePrimary: "主要",
+    styleSecondary: "次要",
+    styleDanger: "强调",
+    durationSec: "显示秒数（留空＝持续）",
+    pushNow: "立即显示",
+    quickTip: "快速小提示卡",
+    tipTitle: "标题",
+    tipContent: "内容",
+    quickChat: "快速假人聊天",
+    chatName: "昵称",
+    pickFakeUser: "选假人",
+    chatMessage: "消息内容",
+    sendChat: "发送到聊天室",
+    toastCtaPushed: "CTA 已显示给所有观众",
+    toastTipPushed: "小提示卡已显示给所有观众",
+    toastChatPushed: "假人消息已发送",
+    fillRequired: "请填写必填栏位",
   },
 };
 
@@ -117,6 +165,16 @@ export default function AdminControl() {
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
   const [viewerSessions, setViewerSessions] = useState<Map<string, ViewerSession>>(new Map());
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
+
+  const [ctaTextInput, setCtaTextInput] = useState("");
+  const [ctaUrlInput, setCtaUrlInput] = useState("");
+  const [ctaStyleInput, setCtaStyleInput] = useState("primary");
+  const [ctaDurInput, setCtaDurInput] = useState("");
+  const [tipTitleInput, setTipTitleInput] = useState("");
+  const [tipContentInput, setTipContentInput] = useState("");
+  const [tipDurInput, setTipDurInput] = useState("10");
+  const [chatNameInput, setChatNameInput] = useState("");
+  const [chatMsgInput, setChatMsgInput] = useState("");
   const [viewerCount, setViewerCount] = useState(0);
   const [likeCount, setLikeCount] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
@@ -135,6 +193,11 @@ export default function AdminControl() {
 
   const { data: polls } = useQuery<Poll[]>({
     queryKey: ["/api/webinars", id, "polls"],
+    enabled: !!id,
+  });
+
+  const { data: fakeUsers } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/webinars", id, "fake-users"],
     enabled: !!id,
   });
 
@@ -316,6 +379,61 @@ export default function AdminControl() {
     toast({ 
       title: selectedSession ? s.toastPollSelected : s.toastPollAll 
     });
+  };
+
+  const pushLiveCta = () => {
+    if (!wsRef.current || !ctaTextInput.trim() || !ctaUrlInput.trim()) {
+      toast({ title: s.fillRequired, variant: "destructive" });
+      return;
+    }
+    wsRef.current.send(JSON.stringify({
+      type: "liveCta",
+      data: {
+        text: ctaTextInput.trim(),
+        url: ctaUrlInput.trim(),
+        style: ctaStyleInput,
+        durationSec: ctaDurInput ? Number(ctaDurInput) : undefined,
+      },
+    }));
+    toast({ title: s.toastCtaPushed });
+  };
+
+  const pushLiveTip = () => {
+    if (!wsRef.current || (!tipTitleInput.trim() && !tipContentInput.trim())) {
+      toast({ title: s.fillRequired, variant: "destructive" });
+      return;
+    }
+    wsRef.current.send(JSON.stringify({
+      type: "liveTip",
+      data: {
+        title: tipTitleInput.trim(),
+        content: tipContentInput.trim(),
+        durationSec: tipDurInput ? Number(tipDurInput) : 10,
+      },
+    }));
+    toast({ title: s.toastTipPushed });
+  };
+
+  const pushLiveChat = () => {
+    if (!wsRef.current || !chatMsgInput.trim()) {
+      toast({ title: s.fillRequired, variant: "destructive" });
+      return;
+    }
+    wsRef.current.send(JSON.stringify({
+      type: "liveChat",
+      data: {
+        senderName: chatNameInput.trim() || s.viewerFallback,
+        message: chatMsgInput.trim(),
+      },
+    }));
+    setChatMsgInput("");
+    toast({ title: s.toastChatPushed });
+  };
+
+  const getVimeoEmbedUrl = (url: string) => {
+    const trimmed = (url || "").trim();
+    const idMatch = /^\d+$/.test(trimmed) ? trimmed : trimmed.match(/vimeo\.com\/(?:video\/)?(\d+)/)?.[1];
+    return idMatch ? `https://player.vimeo.com/video/${idMatch}` : trimmed;
   };
 
   const getSessionMessages = () => {
@@ -552,6 +670,129 @@ export default function AdminControl() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
+                <div className="border rounded-md p-3 bg-muted/40">
+                  <h4 className="font-medium mb-1">{s.studio}</h4>
+                  <p className="text-xs text-muted-foreground mb-3">{s.studioHint}</p>
+
+                  {webinar.vimeoUrl && (
+                    <div className="mb-3">
+                      <p className="text-xs text-muted-foreground mb-1">{s.videoPreview}</p>
+                      <div className="relative w-full rounded overflow-hidden" style={{ paddingBottom: "56.25%" }}>
+                        <iframe
+                          src={getVimeoEmbedUrl(webinar.vimeoUrl)}
+                          className="absolute inset-0 w-full h-full"
+                          allow="autoplay; fullscreen; picture-in-picture"
+                          allowFullScreen
+                          data-testid="iframe-studio-preview"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2 mb-4">
+                    <p className="text-sm font-medium">{s.quickCta}</p>
+                    <Input
+                      placeholder={s.ctaText}
+                      value={ctaTextInput}
+                      onChange={(e) => setCtaTextInput(e.target.value)}
+                      data-testid="input-studio-cta-text"
+                    />
+                    <Input
+                      placeholder={s.ctaUrl}
+                      value={ctaUrlInput}
+                      onChange={(e) => setCtaUrlInput(e.target.value)}
+                      data-testid="input-studio-cta-url"
+                    />
+                    <div className="flex gap-2">
+                      <select
+                        className="flex-1 h-9 rounded-md border bg-background px-2 text-sm"
+                        value={ctaStyleInput}
+                        onChange={(e) => setCtaStyleInput(e.target.value)}
+                        data-testid="select-studio-cta-style"
+                      >
+                        <option value="primary">{s.stylePrimary}</option>
+                        <option value="secondary">{s.styleSecondary}</option>
+                        <option value="danger">{s.styleDanger}</option>
+                      </select>
+                      <Input
+                        type="number"
+                        className="w-28"
+                        placeholder={s.durationSec}
+                        value={ctaDurInput}
+                        onChange={(e) => setCtaDurInput(e.target.value)}
+                        data-testid="input-studio-cta-dur"
+                      />
+                    </div>
+                    <Button size="sm" className="w-full" onClick={pushLiveCta} data-testid="button-studio-push-cta">
+                      <Send className="h-4 w-4 mr-1" />
+                      {s.pushNow}
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2 mb-4 border-t pt-3">
+                    <p className="text-sm font-medium">{s.quickTip}</p>
+                    <Input
+                      placeholder={s.tipTitle}
+                      value={tipTitleInput}
+                      onChange={(e) => setTipTitleInput(e.target.value)}
+                      data-testid="input-studio-tip-title"
+                    />
+                    <Input
+                      placeholder={s.tipContent}
+                      value={tipContentInput}
+                      onChange={(e) => setTipContentInput(e.target.value)}
+                      data-testid="input-studio-tip-content"
+                    />
+                    <Input
+                      type="number"
+                      placeholder={s.durationSec}
+                      value={tipDurInput}
+                      onChange={(e) => setTipDurInput(e.target.value)}
+                      data-testid="input-studio-tip-dur"
+                    />
+                    <Button size="sm" className="w-full" onClick={pushLiveTip} data-testid="button-studio-push-tip">
+                      <Send className="h-4 w-4 mr-1" />
+                      {s.pushNow}
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2 border-t pt-3">
+                    <p className="text-sm font-medium">{s.quickChat}</p>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder={s.chatName}
+                        value={chatNameInput}
+                        onChange={(e) => setChatNameInput(e.target.value)}
+                        data-testid="input-studio-chat-name"
+                      />
+                      {fakeUsers && fakeUsers.length > 0 && (
+                        <select
+                          className="w-28 h-9 rounded-md border bg-background px-2 text-sm"
+                          value=""
+                          onChange={(e) => e.target.value && setChatNameInput(e.target.value)}
+                          data-testid="select-studio-fake-user"
+                        >
+                          <option value="">{s.pickFakeUser}</option>
+                          {fakeUsers.map((fu) => (
+                            <option key={fu.id} value={fu.name}>{fu.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <Input
+                      placeholder={s.chatMessage}
+                      value={chatMsgInput}
+                      onChange={(e) => setChatMsgInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") pushLiveChat(); }}
+                      data-testid="input-studio-chat-message"
+                    />
+                    <Button size="sm" className="w-full" onClick={pushLiveChat} data-testid="button-studio-push-chat">
+                      <MessageCircle className="h-4 w-4 mr-1" />
+                      {s.sendChat}
+                    </Button>
+                  </div>
+                </div>
+
                 <div>
                   <h4 className="font-medium mb-2">{s.quickPoll}</h4>
                   {polls && polls.length > 0 ? (

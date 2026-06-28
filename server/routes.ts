@@ -404,6 +404,57 @@ export async function registerRoutes(
             break;
           }
           
+          case "liveCta": {
+            // Host pushes a CTA button to ALL viewers immediately (no timecode wait)
+            if (!isHost || !currentWebinarId) break;
+            const { text, url, style, durationSec } = message.data || {};
+            if (!text || !url) break;
+            const payload = {
+              id: `live-cta-${Date.now()}`,
+              text: String(text),
+              url: String(url),
+              style: style || "primary",
+              expiresAt: durationSec ? Date.now() + Number(durationSec) * 1000 : null,
+            };
+            broadcastToAllSessions(currentWebinarId, { type: "liveCta", data: payload });
+            broadcastToHosts(currentWebinarId, { type: "liveCta", data: payload });
+            break;
+          }
+
+          case "liveTip": {
+            // Host pushes a tip card to ALL viewers immediately
+            if (!isHost || !currentWebinarId) break;
+            const { title, content, durationSec } = message.data || {};
+            if (!title && !content) break;
+            const payload = {
+              id: `live-tip-${Date.now()}`,
+              title: String(title || ""),
+              content: String(content || ""),
+              duration: durationSec ? Number(durationSec) : 10,
+            };
+            broadcastToAllSessions(currentWebinarId, { type: "liveTip", data: payload });
+            break;
+          }
+
+          case "liveChat": {
+            // Host injects a fake-audience chat message visible to ALL viewers
+            if (!isHost || !currentWebinarId) break;
+            const { senderName, message: chatMessage } = message.data || {};
+            if (!chatMessage) break;
+            const payload = {
+              id: `live-chat-${Date.now()}`,
+              webinarId: currentWebinarId,
+              senderName: String(senderName || "觀眾"),
+              message: String(chatMessage),
+              senderType: "scheduled",
+              sentAt: new Date().toISOString(),
+              isPrivate: false,
+            };
+            broadcastToAllSessions(currentWebinarId, { type: "chat", data: payload });
+            broadcastToHosts(currentWebinarId, { type: "chat", data: payload });
+            break;
+          }
+
           case "triggerPoll": {
             // Host triggers poll for a specific session or all sessions
             const { webinarId, pollId, sessionId } = message.data;

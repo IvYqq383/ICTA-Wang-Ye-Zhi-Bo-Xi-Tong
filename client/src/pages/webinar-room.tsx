@@ -53,6 +53,7 @@ export default function WebinarRoom() {
   const [showLikeAnimation, setShowLikeAnimation] = useState(false);
   
   const [visibleCtas, setVisibleCtas] = useState<CtaButton[]>([]);
+  const [liveCtas, setLiveCtas] = useState<CtaButton[]>([]);
   
   const [activePoll, setActivePoll] = useState<Poll | null>(null);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -335,6 +336,23 @@ export default function WebinarRoom() {
         case "scheduledMessage":
           setMessages((prev) => [...prev, msg.data]);
           break;
+        case "liveCta": {
+          const cta = { ...msg.data, startTime: 0, endTime: null } as CtaButton;
+          setLiveCtas((prev) => [...prev.filter((c) => c.id !== cta.id), cta]);
+          if (msg.data.expiresAt) {
+            const ms = msg.data.expiresAt - Date.now();
+            if (ms > 0) setTimeout(() => setLiveCtas((prev) => prev.filter((c) => c.id !== cta.id)), ms);
+          }
+          break;
+        }
+        case "liveTip": {
+          const tip = msg.data as Tip;
+          setVisibleTip(tip);
+          setTimeout(() => {
+            setVisibleTip((current) => (current?.id === tip.id ? null : current));
+          }, (msg.data.duration || 10) * 1000);
+          break;
+        }
         case "history":
           setMessages(msg.data.messages || []);
           setLikeCount(msg.data.likeCount || 0);
@@ -607,9 +625,9 @@ export default function WebinarRoom() {
               </button>
             )}
             
-            {visibleCtas.length > 0 && (
+            {(visibleCtas.length > 0 || liveCtas.length > 0) && (
               <div className="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 right-2 sm:right-4 flex flex-col gap-1.5 sm:gap-2 z-10">
-                {visibleCtas.map((cta) => (
+                {[...visibleCtas, ...liveCtas].map((cta) => (
                   <Button
                     key={cta.id}
                     variant={cta.style === "primary" ? "default" : cta.style === "danger" ? "destructive" : "secondary"}
