@@ -74,7 +74,8 @@ async function requireWebinarOwner(req: Request, res: Response, next: NextFuncti
 
 export async function registerRoutes(
   httpServer: Server,
-  app: Express
+  app: Express,
+  sessionMiddleware?: any
 ): Promise<Server> {
   // 發問通知信節流：每個直播間最短寄送間隔
   const questionNotifyThrottle = new Map<string, number>();
@@ -163,10 +164,25 @@ export async function registerRoutes(
   // WebSocket Server
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
-  wss.on("connection", (ws) => {
+  wss.on("connection", (ws, req) => {
     let currentWebinarId: string | null = null;
     let currentSessionId: string | null = null;
     let isHost = false;
+    let sessionUserId: string | null = null;
+
+    // Parse the express-session from the WS upgrade request cookie so we can
+    // verify host ownership (prevents anyone from claiming host on any webinar).
+    const sessionReady = new Promise<void>((resolve) => {
+      if (!sessionMiddleware) return resolve();
+      try {
+        sessionMiddleware(req as any, {} as any, () => {
+          sessionUserId = (req as any).session?.userId ?? null;
+          resolve();
+        });
+      } catch {
+        resolve();
+      }
+    });
 
     ws.on("message", async (data) => {
       try {
@@ -174,6 +190,9 @@ export async function registerRoutes(
         
         switch (message.type) {
           case "join": {
+            // A socket already authorized as host must not be downgraded/retargeted
+            // to a viewer context (prevents cross-tenant context switching).
+            if (isHost) break;
             // Each viewer gets a unique session - complete isolation
             const { webinarId, sessionId, nickname } = message.data;
             currentWebinarId = webinarId;
@@ -217,6 +236,18 @@ export async function registerRoutes(
           
           case "joinAsHost": {
             const { webinarId } = message.data;
+
+            // Verify the connection owns this webinar before granting host powers.
+            await sessionReady;
+            const ownedWebinar = await storage.getWebinar(webinarId);
+            if (!sessionUserId || !ownedWebinar || ownedWebinar.userId !== sessionUserId) {
+              ws.send(JSON.stringify({
+                type: "error",
+                data: { message: "Unauthorized: not the webinar owner" }
+              }));
+              break;
+            }
+
             currentWebinarId = webinarId;
             isHost = true;
             
@@ -313,8 +344,12 @@ export async function registerRoutes(
           }
           
           case "hostReply": {
-            if (!isHost) break; // only verified host sockets may reply as host
-            const { webinarId, sessionId, senderName, message: chatMessage } = message.data;
+            if (!isHost || !currentWebinarId) break; // only verified host sockets may reply as host
+            const { sessionId, senderName, message: chatMessage } = message.data;
+            // Never trust a client-supplied webinarId; use the server-bound one.
+            const webinarId = currentWebinarId;
+            // The target session must belong to this host's webinar.
+            if (!sessionId || !webinarSessions.get(webinarId)?.has(sessionId)) break;
             
             const savedMessage = await storage.createChatMessage({
               webinarId,
@@ -341,8 +376,12 @@ export async function registerRoutes(
           }
           
           case "scheduledMessage": {
-            // Scheduled/fake user messages - only send to specific session
-            const { webinarId, sessionId, senderName, message: chatMessage } = message.data;
+            // Scheduled/fake user messages - only verified hosts may inject these.
+            if (!isHost || !currentWebinarId) break;
+            const webinarId = currentWebinarId;
+            const { sessionId, senderName, message: chatMessage } = message.data;
+            // Target session must belong to this host's webinar.
+            if (!sessionId || !webinarSessions.get(webinarId)?.has(sessionId)) break;
             
             const viewerWs = sessionConnections.get(sessionId);
             if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
@@ -362,7 +401,11 @@ export async function registerRoutes(
           }
           
           case "like": {
-            const { webinarId, sessionId } = message.data;
+            // Derive webinar/session from the server-bound connection state;
+            // never trust client-supplied identifiers (prevents cross-tenant likes).
+            if (!currentWebinarId || !currentSessionId) break;
+            const webinarId = currentWebinarId;
+            const sessionId = currentSessionId;
             const newCount = await storage.incrementLikes(webinarId);
             
             // Only send like update to this viewer
@@ -382,11 +425,16 @@ export async function registerRoutes(
           }
           
           case "vote": {
-            const { pollId, optionIndex, sessionId } = message.data;
+            // Viewer must have joined; ignore client-supplied sessionId/webinarId.
+            if (!currentWebinarId || !currentSessionId) break;
+            const { pollId, optionIndex } = message.data;
+            // The poll must belong to this viewer's webinar.
+            const votePoll = await storage.getPoll(pollId);
+            if (!votePoll || votePoll.webinarId !== currentWebinarId) break;
             
             await storage.createPollVote({
               pollId,
-              participantId: sessionId || Math.random().toString(36).substring(7),
+              participantId: currentSessionId,
               optionIndex
             });
             
@@ -409,10 +457,13 @@ export async function registerRoutes(
             if (!isHost || !currentWebinarId) break;
             const { text, url, style, durationSec } = message.data || {};
             if (!text || !url) break;
+            // Only allow safe URL schemes (block javascript:/data: injection).
+            const safeUrl = String(url).trim();
+            if (!/^(https?:\/\/|\/|mailto:|tel:)/i.test(safeUrl)) break;
             const payload = {
               id: `live-cta-${Date.now()}`,
               text: String(text),
-              url: String(url),
+              url: safeUrl,
               style: style || "primary",
               expiresAt: durationSec ? Date.now() + Number(durationSec) * 1000 : null,
             };
@@ -457,11 +508,15 @@ export async function registerRoutes(
 
           case "triggerPoll": {
             // Host triggers poll for a specific session or all sessions
-            const { webinarId, pollId, sessionId } = message.data;
+            if (!isHost || !currentWebinarId) break;
+            const { pollId, sessionId } = message.data;
+            const webinarId = currentWebinarId;
             const poll = await storage.getPoll(pollId);
             
-            if (poll) {
+            if (poll && poll.webinarId === webinarId) {
               if (sessionId) {
+                // Target session must belong to this host's webinar.
+                if (!webinarSessions.get(webinarId)?.has(sessionId)) break;
                 // Send to specific session
                 const viewerWs = sessionConnections.get(sessionId);
                 if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {

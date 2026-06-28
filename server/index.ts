@@ -23,23 +23,23 @@ declare module "http" {
 
 const PgStore = connectPgSimple(session);
 
-app.use(
-  session({
-    store: new PgStore({
-      conString: process.env.DATABASE_URL,
-      createTableIfMissing: true,
-    }),
-    secret: process.env.SESSION_SECRET || "webinar-secret-key-2024",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: "auto" as any,
-      httpOnly: true,
-      sameSite: "lax" as const,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    },
-  })
-);
+const sessionMiddleware = session({
+  store: new PgStore({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: true,
+  }),
+  secret: process.env.SESSION_SECRET || "webinar-secret-key-2024",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: "auto" as any,
+    httpOnly: true,
+    sameSite: "lax" as const,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  },
+});
+
+app.use(sessionMiddleware);
 
 app.post(
   '/api/stripe/webhook',
@@ -165,7 +165,7 @@ app.use((req, res, next) => {
     console.error("Failed to seed admin account:", err);
   }
 
-  await registerRoutes(httpServer, app);
+  await registerRoutes(httpServer, app, sessionMiddleware);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

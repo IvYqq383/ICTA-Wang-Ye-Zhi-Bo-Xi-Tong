@@ -128,6 +128,10 @@ const t: Record<LangAdmin, Record<string, string>> = {
     aiDocTitlePlaceholder: "例如：課程大綱",
     aiDocContent: "內容（直接貼上文字）",
     aiDocContentPlaceholder: "在此貼上文字內容...",
+    aiSrtUpload: "上傳 SRT 字幕檔",
+    aiSrtHint: "上傳整部影片的 .srt 字幕，系統自動去除時間碼與編號，轉成 AI 知識內容",
+    aiSrtLoaded: "字幕已載入，可編輯後儲存",
+    aiSrtInvalid: "無法讀取字幕檔",
     aiNoDocs: "尚未新增任何文檔",
     aiDocSaved: "文檔已新增",
     aiSettingsSaved: "AI 設定已儲存",
@@ -516,6 +520,10 @@ const t: Record<LangAdmin, Record<string, string>> = {
     aiDocTitlePlaceholder: "例如：课程大纲",
     aiDocContent: "内容（直接粘贴文字）",
     aiDocContentPlaceholder: "在此粘贴文字内容...",
+    aiSrtUpload: "上传 SRT 字幕档",
+    aiSrtHint: "上传整部视频的 .srt 字幕，系统自动去除时间码与编号，转成 AI 知识内容",
+    aiSrtLoaded: "字幕已载入，可编辑后保存",
+    aiSrtInvalid: "无法读取字幕档",
     aiNoDocs: "尚未新增任何文档",
     aiDocSaved: "文档已新增",
     aiSettingsSaved: "AI 设置已保存",
@@ -1441,6 +1449,44 @@ export default function AdminWebinarDetail() {
       toast({ title: s.toastSaveFailed, description: error.message, variant: "destructive" });
     },
   });
+
+  const handleSrtUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const raw = await file.text();
+      const text = raw
+        .replace(/\r/g, "")
+        .split("\n\n")
+        .map((block) =>
+          block
+            .split("\n")
+            .filter((line) => {
+              const t = line.trim();
+              if (/^\d+$/.test(t)) return false;
+              if (/-->/.test(t)) return false;
+              return t.length > 0;
+            })
+            .join(" ")
+        )
+        .filter((s) => s.trim().length > 0)
+        .join("\n")
+        .replace(/<[^>]+>/g, "")
+        .trim();
+      if (!text) {
+        toast({ title: s.aiSrtInvalid, variant: "destructive" });
+        return;
+      }
+      if (!newDocTitle.trim()) {
+        setNewDocTitle(file.name.replace(/\.srt$/i, ""));
+      }
+      setNewDocContent(text);
+      toast({ title: s.aiSrtLoaded });
+    } catch {
+      toast({ title: s.aiSrtInvalid, variant: "destructive" });
+    }
+  };
 
   const createDocument = useMutation({
     mutationFn: async (data: { title: string; content: string }) => {
@@ -4119,6 +4165,25 @@ export default function AdminWebinarDetail() {
                   <CardDescription>{s.settingsPopupDesc}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="border rounded-md p-3 bg-primary/5">
+                    <p className="text-sm font-semibold mb-1">{s.settingsAllInOne}</p>
+                    <p className="text-xs text-muted-foreground mb-2">{s.settingsAllInOneDesc}</p>
+                    <div className="relative">
+                      <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all" data-testid="text-embed-allinone-code">{`<script src="${window.location.origin}/livecast-widget.js"></script>\n<button data-livecast-register="${id}">${s.settingsRegisterNow}</button>`}</pre>
+                      <Button
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`<script src="${window.location.origin}/livecast-widget.js"></script>\n<button data-livecast-register="${id}">${s.settingsRegisterNow}</button>`);
+                          toast({ title: s.toastEmbedCodeCopied });
+                        }}
+                        data-testid="button-copy-embed-allinone"
+                      >
+                        <Copy className="h-4 w-4 mr-1" />
+                        {s.settingsCopyAll}
+                      </Button>
+                    </div>
+                  </div>
                   <div>
                     <p className="text-sm font-medium mb-2">{s.settingsStep1Script}</p>
                     <div className="relative">
@@ -4306,6 +4371,16 @@ export default function AdminWebinarDetail() {
                             placeholder={s.aiDocTitlePlaceholder}
                             data-testid="input-document-title"
                           />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{s.aiSrtUpload}</Label>
+                          <Input
+                            type="file"
+                            accept=".srt,text/plain"
+                            onChange={handleSrtUpload}
+                            data-testid="input-document-srt"
+                          />
+                          <p className="text-xs text-muted-foreground">{s.aiSrtHint}</p>
                         </div>
                         <div className="space-y-2">
                           <Label>{s.aiDocContent}</Label>
