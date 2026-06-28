@@ -1,1 +1,2 @@
 - [WebSocket host authz](ws-host-authz.md) — WS host/viewer handlers must derive webinar/session from server-bound connection state + verified session ownership, never from client message data.
+- [AI point billing](ai-point-billing.md) — metered LLM calls reserve-then-refund (never check-then-charge); paid recharge credit must be one db transaction; verify session ownership before idempotency shortcut.

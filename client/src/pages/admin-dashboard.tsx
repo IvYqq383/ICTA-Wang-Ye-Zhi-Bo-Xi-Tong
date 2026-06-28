@@ -20,7 +20,7 @@ import {
   Plus, Video, Calendar, Crown,
   ExternalLink, Loader2, LogOut, Radio, Copy,
   BarChart3, Users, Pencil, Share2, MessageCircle,
-  Eye, Code, Trash2, MoreVertical, Languages
+  Eye, Code, Trash2, MoreVertical, Languages, Sparkles
 } from "lucide-react";
 import type { Webinar } from "@shared/schema";
 
@@ -113,6 +113,21 @@ const t: Record<LangAdmin, {
   toastUpgradeNeededDesc: string;
   publishLimitReached: string;
   publishLimitReachedDesc: string;
+  aiPointsTitle: string;
+  aiPointsBalance: string;
+  aiPointsUnit: string;
+  aiPointsUnlimited: string;
+  aiPointsHint: string;
+  aiPointsRecharge: string;
+  rechargeTitle: string;
+  rechargeDesc: string;
+  rechargeCustom: string;
+  rechargeCustomPlaceholder: string;
+  rechargeCustomBtn: string;
+  rechargePoints: string;
+  rechargeSuccess: string;
+  rechargeSuccessDesc: string;
+  rechargeFail: string;
 }> = {
   "zh-TW": {
     validationTitle: "請輸入標題",
@@ -196,6 +211,21 @@ const t: Record<LangAdmin, {
     toastUpgradeNeededDesc: "免費方案無法建立直播間，請先升級",
     publishLimitReached: "已達發佈上限",
     publishLimitReachedDesc: "最多可發佈 3 個直播間，請取消發佈其他直播間",
+    aiPointsTitle: "AI 回覆點數",
+    aiPointsBalance: "目前餘額",
+    aiPointsUnit: "點",
+    aiPointsUnlimited: "無限（企業／管理員）",
+    aiPointsHint: "觀眾在直播間向 AI 提問，每則回覆扣 1 點。點數用完 AI 會停止回覆並顯示提示訊息。",
+    aiPointsRecharge: "充值點數",
+    rechargeTitle: "充值 AI 點數",
+    rechargeDesc: "選擇儲值包或自訂金額（1 元 = 1 點）",
+    rechargeCustom: "自訂金額（元）",
+    rechargeCustomPlaceholder: "最低 100 元",
+    rechargeCustomBtn: "自訂金額付款",
+    rechargePoints: "點",
+    rechargeSuccess: "充值成功",
+    rechargeSuccessDesc: "點數已入帳，目前餘額 {points} 點",
+    rechargeFail: "充值失敗",
   },
   "zh-CN": {
     validationTitle: "请输入标题",
@@ -279,6 +309,21 @@ const t: Record<LangAdmin, {
     toastUpgradeNeededDesc: "免费方案无法创建直播间，请先升级",
     publishLimitReached: "已达发布上限",
     publishLimitReachedDesc: "最多可发布 3 个直播间，请取消发布其他直播间",
+    aiPointsTitle: "AI 回复点数",
+    aiPointsBalance: "当前余额",
+    aiPointsUnit: "点",
+    aiPointsUnlimited: "无限（企业／管理员）",
+    aiPointsHint: "观众在直播间向 AI 提问，每条回复扣 1 点。点数用完 AI 会停止回复并显示提示信息。",
+    aiPointsRecharge: "充值点数",
+    rechargeTitle: "充值 AI 点数",
+    rechargeDesc: "选择储值包或自定义金额（1 元 = 1 点）",
+    rechargeCustom: "自定义金额（元）",
+    rechargeCustomPlaceholder: "最低 100 元",
+    rechargeCustomBtn: "自定义金额付款",
+    rechargePoints: "点",
+    rechargeSuccess: "充值成功",
+    rechargeSuccessDesc: "点数已入账，当前余额 {points} 点",
+    rechargeFail: "充值失败",
   },
 };
 
@@ -298,6 +343,8 @@ export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isRechargeOpen, setIsRechargeOpen] = useState(false);
+  const [customAmount, setCustomAmount] = useState("");
   const { lang, setLang } = useAdminLang();
   const s = t[lang];
 
@@ -333,6 +380,17 @@ export default function AdminDashboard() {
   }>({
     queryKey: ["/api/stripe/config"],
     enabled: subscription?.plan === "free",
+  });
+
+  const { data: aiPoints } = useQuery<{
+    points: number;
+    unlimited: boolean;
+    pointsPerReply: number;
+    pointsPerTwd: number;
+    minTwd: number;
+    packages: { id: string; twd: number; points: number }[];
+  }>({
+    queryKey: ["/api/ai-points"],
   });
 
   const form = useForm<WebinarForm>({
@@ -456,6 +514,19 @@ export default function AdminDashboard() {
     },
   });
 
+  const rechargeMutation = useMutation({
+    mutationFn: async (body: { packageId?: string; amount?: number }) => {
+      const res = await apiRequest("POST", "/api/stripe/recharge-checkout", body);
+      return await res.json();
+    },
+    onSuccess: (data: { url: string }) => {
+      if (data.url) window.location.href = data.url;
+    },
+    onError: (error: any) => {
+      toast({ title: s.rechargeFail, description: error.message, variant: "destructive" });
+    },
+  });
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("checkout") === "success") {
@@ -466,6 +537,23 @@ export default function AdminDashboard() {
           window.history.replaceState({}, "", "/admin/dashboard");
         })
         .catch(() => {});
+    }
+    if (params.get("recharge") === "success") {
+      const sessionId = params.get("session_id");
+      window.history.replaceState({}, "", "/admin/dashboard");
+      if (sessionId) {
+        apiRequest("POST", "/api/stripe/confirm-recharge", { sessionId })
+          .then(async (res) => {
+            const data = await res.json();
+            queryClient.invalidateQueries({ queryKey: ["/api/ai-points"] });
+            toast({ title: s.rechargeSuccess, description: s.rechargeSuccessDesc?.replace("{points}", String(data.points ?? "")) });
+          })
+          .catch((err: any) => {
+            toast({ title: s.rechargeFail, description: err.message, variant: "destructive" });
+          });
+      }
+    } else if (params.get("recharge") === "cancel") {
+      window.history.replaceState({}, "", "/admin/dashboard");
     }
   }, []);
 
@@ -595,6 +683,83 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         )}
+
+        {aiPoints && (
+          <Card>
+            <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="rounded-md bg-primary/10 p-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold">{s.aiPointsTitle}</span>
+                    {aiPoints.unlimited ? (
+                      <Badge variant="default" data-testid="badge-ai-unlimited">{s.aiPointsUnlimited}</Badge>
+                    ) : (
+                      <span className="text-sm">
+                        <span className="text-muted-foreground">{s.aiPointsBalance}: </span>
+                        <span className="font-bold text-lg" data-testid="text-ai-points">{aiPoints.points}</span>
+                        <span className="text-muted-foreground"> {s.aiPointsUnit}</span>
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-md">{s.aiPointsHint}</p>
+                </div>
+              </div>
+              {!aiPoints.unlimited && (
+                <Button size="sm" onClick={() => setIsRechargeOpen(true)} data-testid="button-open-recharge">
+                  <Plus className="h-4 w-4 mr-1" />
+                  {s.aiPointsRecharge}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        <Dialog open={isRechargeOpen} onOpenChange={setIsRechargeOpen}>
+          <DialogContent className="sm:max-w-md" data-testid="dialog-recharge">
+            <DialogHeader>
+              <DialogTitle>{s.rechargeTitle}</DialogTitle>
+              <DialogDescription>{s.rechargeDesc}</DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {aiPoints?.packages.map((pkg) => (
+                <Button
+                  key={pkg.id}
+                  variant="outline"
+                  className="h-auto flex-col py-4 gap-1"
+                  disabled={rechargeMutation.isPending}
+                  onClick={() => rechargeMutation.mutate({ packageId: pkg.id })}
+                  data-testid={`button-package-${pkg.id}`}
+                >
+                  <span className="text-lg font-bold">{pkg.points} {s.rechargePoints}</span>
+                  <span className="text-sm text-muted-foreground">NT$ {pkg.twd}</span>
+                </Button>
+              ))}
+            </div>
+            <div className="space-y-2 pt-2">
+              <label className="text-sm font-medium">{s.rechargeCustom}</label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min={aiPoints?.minTwd ?? 100}
+                  placeholder={s.rechargeCustomPlaceholder}
+                  value={customAmount}
+                  onChange={(e) => setCustomAmount(e.target.value)}
+                  data-testid="input-custom-amount"
+                />
+                <Button
+                  disabled={rechargeMutation.isPending || Number(customAmount) < (aiPoints?.minTwd ?? 100)}
+                  onClick={() => rechargeMutation.mutate({ amount: Number(customAmount) })}
+                  data-testid="button-custom-recharge"
+                >
+                  {rechargeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : s.rechargeCustomBtn}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>

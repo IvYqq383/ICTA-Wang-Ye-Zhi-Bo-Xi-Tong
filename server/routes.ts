@@ -29,6 +29,13 @@ import bcrypt from "bcryptjs";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 import { looksLikeQuestion, answerViewerQuestion } from "./aiAssistant";
 
+// ===== AI 點數計費常數 =====
+const AI_POINTS_PER_REPLY = 1; // 每則 AI 回覆扣的點數
+const POINTS_PER_TWD = 1; // 1 元 = 1 點
+const RECHARGE_MIN_TWD = 100; // 自訂金額最低消費
+const RECHARGE_PACKAGES: Record<string, number> = { p300: 300, p1000: 1000, p3000: 3000 }; // 固定儲值包（元）
+const OUT_OF_POINTS_DEFAULT = "感謝您的提問！目前線上客服忙線中，主辦團隊將盡快親自回覆您 🙏";
+
 declare module "express-session" {
   interface SessionData {
     userId?: string;
@@ -584,6 +591,23 @@ export async function registerRoutes(
   }
 
   // AI 助教：判斷觀眾訊息是否為問題，是則用文檔回答，以老師名義私訊回覆該觀眾
+  // 把一則「以老師名義」的私訊送給觀眾並同步給主持人
+  async function sendAiMessage(webinarId: string, sessionId: string, teacherName: string, text: string) {
+    const savedMessage = await storage.createChatMessage({
+      webinarId,
+      sessionId,
+      senderName: teacherName,
+      message: text,
+      senderType: "host",
+      isPrivate: true,
+    });
+    const viewerWs = sessionConnections.get(sessionId);
+    if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
+      viewerWs.send(JSON.stringify({ type: "chat", data: savedMessage }));
+    }
+    broadcastToHosts(webinarId, { type: "chat", data: { ...savedMessage, sessionId } });
+  }
+
   async function maybeAiReply(webinarId: string, sessionId: string, viewerMessage: string) {
     const webinar = await storage.getWebinar(webinarId);
     const ai = webinar?.aiSettings;
@@ -591,6 +615,26 @@ export async function registerRoutes(
     if (!looksLikeQuestion(viewerMessage)) return;
 
     const teacherName = (ai.teacherName || "").trim() || "老師";
+
+    // 點數檢查：AI 回覆消耗「該直播間擁有廠商」的點數。
+    // 超級管理員/企業方案無限制；點數用完則顯示預設訊息、不呼叫 AI（省成本）。
+    const ownerId = webinar.userId;
+    const owner = ownerId ? await storage.getUser(ownerId) : undefined;
+    const unlimited = !!owner && (owner.isSuperAdmin || owner.subscriptionPlan === "enterprise");
+    const outOfPointsMsg = (ai.outOfPointsMessage || "").trim() || OUT_OF_POINTS_DEFAULT;
+
+    // 先原子預扣（reserve）再呼叫 AI：避免「只剩 1 點 + 並發多題」時兩題都呼叫 Anthropic 浪費成本。
+    // 預扣失敗（不足）→ 顯示預設訊息、不呼叫 AI。
+    let reserved = false;
+    if (!unlimited) {
+      const remaining = ownerId ? await storage.deductAiPoints(ownerId, AI_POINTS_PER_REPLY) : null;
+      if (remaining === null) {
+        await sendAiMessage(webinarId, sessionId, teacherName, outOfPointsMsg);
+        return;
+      }
+      reserved = true;
+    }
+
     const answer = await answerViewerQuestion(
       webinarId,
       webinar.title,
@@ -598,22 +642,13 @@ export async function registerRoutes(
       viewerMessage,
       ai.fallbackMessage
     );
-    if (!answer) return;
-
-    const savedMessage = await storage.createChatMessage({
-      webinarId,
-      sessionId,
-      senderName: teacherName,
-      message: answer,
-      senderType: "host",
-      isPrivate: true,
-    });
-
-    const viewerWs = sessionConnections.get(sessionId);
-    if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
-      viewerWs.send(JSON.stringify({ type: "chat", data: savedMessage }));
+    if (!answer) {
+      // AI 失敗：退回預扣的點數（不向觀眾收費）
+      if (reserved && ownerId) await storage.addAiPoints(ownerId, AI_POINTS_PER_REPLY);
+      return;
     }
-    broadcastToHosts(webinarId, { type: "chat", data: { ...savedMessage, sessionId } });
+
+    await sendAiMessage(webinarId, sessionId, teacherName, answer);
   }
 
   // ============ Auth Routes ============
@@ -1006,6 +1041,138 @@ export async function registerRoutes(
       }
 
       return res.json({ success: false, message: "No active subscription found" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ============ AI 點數計費 ============
+  // 取得目前廠商的 AI 點數餘額
+  app.get("/api/ai-points", requireAdmin, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+      const unlimited = user.isSuperAdmin || user.subscriptionPlan === "enterprise";
+      res.json({
+        points: user.aiPoints,
+        unlimited,
+        pointsPerReply: AI_POINTS_PER_REPLY,
+        pointsPerTwd: POINTS_PER_TWD,
+        minTwd: RECHARGE_MIN_TWD,
+        packages: Object.entries(RECHARGE_PACKAGES).map(([id, twd]) => ({ id, twd, points: twd * POINTS_PER_TWD })),
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // 建立 AI 點數充值 Checkout（一次性付款）
+  app.post("/api/stripe/recharge-checkout", requireAdmin, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+      // 計算金額（元）：固定包或自訂金額
+      let amountTwd: number;
+      const { packageId, amount } = req.body || {};
+      if (packageId) {
+        if (!RECHARGE_PACKAGES[packageId]) {
+          return res.status(400).json({ message: "無效的儲值包" });
+        }
+        amountTwd = RECHARGE_PACKAGES[packageId];
+      } else {
+        amountTwd = Math.floor(Number(amount));
+        if (!Number.isFinite(amountTwd) || amountTwd < RECHARGE_MIN_TWD) {
+          return res.status(400).json({ message: `自訂金額最低為 ${RECHARGE_MIN_TWD} 元` });
+        }
+      }
+      const points = amountTwd * POINTS_PER_TWD;
+
+      const stripe = await getUncachableStripeClient();
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email || undefined,
+          metadata: { userId: user.id, username: user.username },
+        });
+        await storage.updateUser(user.id, { stripeCustomerId: customer.id } as any);
+        customerId = customer.id;
+      }
+
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ["card"],
+        mode: "payment",
+        line_items: [{
+          price_data: {
+            currency: "twd",
+            product_data: { name: `AI 回覆點數 ${points} 點` },
+            unit_amount: amountTwd * 100,
+          },
+          quantity: 1,
+        }],
+        metadata: { userId: user.id, points: String(points), amountTwd: String(amountTwd), kind: "ai_points" },
+        success_url: `${baseUrl}/admin/dashboard?recharge=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/admin/dashboard?recharge=cancel`,
+      });
+
+      res.json({ url: session.url });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // 付款完成後由前端帶 session_id 回來確認入點（冪等）
+  app.post("/api/stripe/confirm-recharge", requireAdmin, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+      const { sessionId } = req.body || {};
+      if (!sessionId || typeof sessionId !== "string") return res.status(400).json({ message: "缺少 sessionId" });
+
+      // 已處理過：先驗證該交易屬於本人（避免 session 探測），再回成功
+      const existingOwner = await storage.getPointTransactionOwner(sessionId);
+      if (existingOwner) {
+        if (existingOwner !== user.id) return res.status(403).json({ message: "無效的付款資訊" });
+        return res.json({ success: true, alreadyProcessed: true, points: user.aiPoints });
+      }
+
+      const stripe = await getUncachableStripeClient();
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      if (session.payment_status !== "paid") {
+        return res.status(400).json({ message: "尚未完成付款" });
+      }
+      // 必須是本人的、且是點數充值的 session
+      if (session.metadata?.userId !== user.id || session.metadata?.kind !== "ai_points") {
+        return res.status(403).json({ message: "無效的付款資訊" });
+      }
+
+      const points = parseInt(session.metadata.points || "0", 10);
+      const amountTwd = parseInt(session.metadata.amountTwd || "0", 10);
+      if (points <= 0) return res.status(400).json({ message: "無效的點數" });
+
+      // 交易記錄 + 加點同一個 DB transaction（冪等 + 一致性，可安全重試）
+      const result = await storage.creditPointPurchase({ userId: user.id, points, amountTwd, stripeSessionId: sessionId });
+      res.json({ success: true, added: result.alreadyProcessed ? 0 : points, points: result.points, alreadyProcessed: result.alreadyProcessed });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // 超級管理員手動贈送點數
+  app.post("/api/super-admin/users/:id/grant-points", requireAdmin, async (req, res) => {
+    try {
+      const admin = await storage.getUser(req.session.userId!);
+      if (!admin?.isSuperAdmin) return res.status(403).json({ message: "需要超級管理員權限" });
+      const points = Math.floor(Number(req.body?.points));
+      if (!Number.isFinite(points) || points === 0) return res.status(400).json({ message: "無效的點數" });
+      const target = await storage.getUser(String(req.params.id));
+      if (!target) return res.status(404).json({ message: "找不到使用者" });
+      await storage.recordPointTransaction({ userId: target.id, type: "grant", points, amountTwd: null, stripeSessionId: null });
+      const newBalance = await storage.addAiPoints(target.id, points);
+      res.json({ success: true, points: newBalance });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

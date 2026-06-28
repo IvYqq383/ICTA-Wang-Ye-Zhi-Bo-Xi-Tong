@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, lt, lte, desc, asc, count, isNull, or } from "drizzle-orm";
+import { eq, and, lt, lte, gte, desc, asc, count, isNull, or, sql } from "drizzle-orm";
 import {
   webinars, type InsertWebinar, type Webinar,
   registrations, type InsertRegistration, type Registration,
@@ -21,6 +21,7 @@ import {
   webinarSessions, type InsertWebinarSession, type WebinarSession,
   webhooks, type InsertWebhook, type Webhook,
   webinarDocuments, type InsertWebinarDocument, type WebinarDocument,
+  aiPointTransactions, type AiPointTransaction,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -33,6 +34,13 @@ export interface IStorage {
   getWebinarCountByUser(userId: string): Promise<number>;
   getPublishedWebinarCountByUser(userId: string): Promise<number>;
   getUserByStripeCustomerId(stripeCustomerId: string): Promise<User | undefined>;
+  // AI 點數
+  deductAiPoints(userId: string, points: number): Promise<number | null>; // 原子扣點；不足回 null
+  addAiPoints(userId: string, points: number): Promise<number>; // 原子加點，回新餘額
+  isStripeSessionProcessed(stripeSessionId: string): Promise<boolean>;
+  recordPointTransaction(data: { userId: string; type: string; points: number; amountTwd?: number | null; stripeSessionId?: string | null }): Promise<AiPointTransaction>;
+  creditPointPurchase(data: { userId: string; points: number; amountTwd: number; stripeSessionId: string }): Promise<{ points: number; alreadyProcessed: boolean }>;
+  getPointTransactionOwner(stripeSessionId: string): Promise<string | null>;
   
   // Webinars
   createWebinar(data: InsertWebinar): Promise<Webinar>;
@@ -176,6 +184,77 @@ export class DatabaseStorage implements IStorage {
   async getUserByStripeCustomerId(stripeCustomerId: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.stripeCustomerId, stripeCustomerId));
     return result[0];
+  }
+
+  // 原子扣點：只有餘額足夠才扣，避免並發競態。成功回新餘額，不足回 null
+  async deductAiPoints(userId: string, points: number): Promise<number | null> {
+    const result = await db
+      .update(users)
+      .set({ aiPoints: sql`${users.aiPoints} - ${points}` })
+      .where(and(eq(users.id, userId), gte(users.aiPoints, points)))
+      .returning({ aiPoints: users.aiPoints });
+    return result[0]?.aiPoints ?? null;
+  }
+
+  async addAiPoints(userId: string, points: number): Promise<number> {
+    const result = await db
+      .update(users)
+      .set({ aiPoints: sql`${users.aiPoints} + ${points}` })
+      .where(eq(users.id, userId))
+      .returning({ aiPoints: users.aiPoints });
+    return result[0]?.aiPoints ?? 0;
+  }
+
+  async isStripeSessionProcessed(stripeSessionId: string): Promise<boolean> {
+    const result = await db.select({ id: aiPointTransactions.id }).from(aiPointTransactions).where(eq(aiPointTransactions.stripeSessionId, stripeSessionId));
+    return result.length > 0;
+  }
+
+  async recordPointTransaction(data: { userId: string; type: string; points: number; amountTwd?: number | null; stripeSessionId?: string | null }): Promise<AiPointTransaction> {
+    const result = await db.insert(aiPointTransactions).values({
+      userId: data.userId,
+      type: data.type,
+      points: data.points,
+      amountTwd: data.amountTwd ?? null,
+      stripeSessionId: data.stripeSessionId ?? null,
+    }).returning();
+    return result[0];
+  }
+
+  // 交易記錄 + 加點在同一個 DB transaction 中完成（冪等 + 一致性）
+  // 回傳 { points: 新餘額, alreadyProcessed }。session 已處理時不重複入點。
+  async creditPointPurchase(data: { userId: string; points: number; amountTwd: number; stripeSessionId: string }): Promise<{ points: number; alreadyProcessed: boolean }> {
+    return await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(aiPointTransactions)
+        .values({
+          userId: data.userId,
+          type: "purchase",
+          points: data.points,
+          amountTwd: data.amountTwd,
+          stripeSessionId: data.stripeSessionId,
+        })
+        .onConflictDoNothing({ target: aiPointTransactions.stripeSessionId })
+        .returning({ id: aiPointTransactions.id });
+
+      if (inserted.length === 0) {
+        const current = await tx.select({ aiPoints: users.aiPoints }).from(users).where(eq(users.id, data.userId));
+        return { points: current[0]?.aiPoints ?? 0, alreadyProcessed: true };
+      }
+
+      const updated = await tx
+        .update(users)
+        .set({ aiPoints: sql`${users.aiPoints} + ${data.points}` })
+        .where(eq(users.id, data.userId))
+        .returning({ aiPoints: users.aiPoints });
+      return { points: updated[0]?.aiPoints ?? 0, alreadyProcessed: false };
+    });
+  }
+
+  // 查詢某 Stripe session 的交易擁有者（用於授權檢查，避免 session 探測）
+  async getPointTransactionOwner(stripeSessionId: string): Promise<string | null> {
+    const result = await db.select({ userId: aiPointTransactions.userId }).from(aiPointTransactions).where(eq(aiPointTransactions.stripeSessionId, stripeSessionId));
+    return result[0]?.userId ?? null;
   }
 
   // Webinars

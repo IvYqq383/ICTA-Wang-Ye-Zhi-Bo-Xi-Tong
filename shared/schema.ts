@@ -49,6 +49,7 @@ export const webinars = pgTable("webinars", {
     enabled: boolean;        // 是否啟用 AI 自動回覆
     teacherName: string;     // 回覆時顯示的老師名稱
     fallbackMessage?: string; // 答不出來時的自訂回覆（空 = 用預設行為）
+    outOfPointsMessage?: string; // AI 點數用完時顯示給觀眾的訊息（空 = 用預設）
   }>().default({ enabled: false, teacherName: "" }),
 
   // 報名表單自訂欄位
@@ -421,14 +422,30 @@ export const users = pgTable("users", {
   maxWebinars: integer("max_webinars").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   isSuperAdmin: boolean("is_super_admin").notNull().default(false),
+  aiPoints: integer("ai_points").notNull().default(20), // AI 回覆點數餘額（新廠商送 20 點試用）
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, subscriptionPlan: true, planExpiresAt: true, maxWebinars: true, isActive: true, isSuperAdmin: true, stripeCustomerId: true, stripeSubscriptionId: true });
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, subscriptionPlan: true, planExpiresAt: true, maxWebinars: true, isActive: true, isSuperAdmin: true, aiPoints: true, stripeCustomerId: true, stripeSubscriptionId: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// AI 點數交易記錄（充值 / 後台贈送），用於 Stripe 充值的冪等保護
+export const aiPointTransactions = pgTable("ai_point_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  type: text("type").notNull(), // purchase, grant
+  points: integer("points").notNull(), // 增加的點數
+  amountTwd: integer("amount_twd"), // 付款金額（元），grant 為 null
+  stripeSessionId: text("stripe_session_id").unique(), // Stripe checkout session（冪等用）
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAiPointTransactionSchema = createInsertSchema(aiPointTransactions).omit({ id: true, createdAt: true });
+export type InsertAiPointTransaction = z.infer<typeof insertAiPointTransactionSchema>;
+export type AiPointTransaction = typeof aiPointTransactions.$inferSelect;
 
 // Webinar Sessions (用於循環排程的場次)
 export const webinarSessions = pgTable("webinar_sessions", {
