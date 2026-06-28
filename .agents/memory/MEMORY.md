@@ -1,0 +1,2 @@
+- [drizzle-kit push prompt](drizzle-push-tty.md) — `npm run db:push` interactive create/rename prompt can't accept piped input here; apply additive schema changes via direct SQL instead.
+- [WS chat server-bound identity](ws-chat-identity.md) — chat WS handler must use connection-bound currentWebinarId/currentSessionId, never client-supplied, to prevent cross-webinar spoofing & AI cost abuse.

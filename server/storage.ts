@@ -20,6 +20,7 @@ import {
   users, type InsertUser, type User,
   webinarSessions, type InsertWebinarSession, type WebinarSession,
   webhooks, type InsertWebhook, type Webhook,
+  webinarDocuments, type InsertWebinarDocument, type WebinarDocument,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -129,6 +130,11 @@ export interface IStorage {
   getWebhooksByEvent(webinarId: string, eventType: string): Promise<Webhook[]>;
   deleteWebhook(id: string): Promise<void>;
   updateWebhook(id: string, data: Partial<Webhook>): Promise<Webhook | undefined>;
+
+  // Webinar Documents (AI 知識文檔)
+  createWebinarDocument(data: InsertWebinarDocument): Promise<WebinarDocument>;
+  getWebinarDocuments(webinarId: string): Promise<WebinarDocument[]>;
+  deleteWebinarDocument(webinarId: string, id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -556,6 +562,24 @@ export class DatabaseStorage implements IStorage {
   async updateWebhook(id: string, data: Partial<Webhook>): Promise<Webhook | undefined> {
     const result = await db.update(webhooks).set(data).where(eq(webhooks.id, id)).returning();
     return result[0];
+  }
+
+  // Webinar Documents
+  async createWebinarDocument(data: InsertWebinarDocument): Promise<WebinarDocument> {
+    const result = await db.insert(webinarDocuments).values(data).returning();
+    return result[0];
+  }
+
+  async getWebinarDocuments(webinarId: string): Promise<WebinarDocument[]> {
+    return db.select().from(webinarDocuments)
+      .where(eq(webinarDocuments.webinarId, webinarId))
+      .orderBy(asc(webinarDocuments.createdAt));
+  }
+
+  async deleteWebinarDocument(webinarId: string, id: string): Promise<void> {
+    await db.delete(webinarDocuments).where(
+      and(eq(webinarDocuments.id, id), eq(webinarDocuments.webinarId, webinarId))
+    );
   }
 }
 

@@ -22,13 +22,13 @@ import {
   BarChart, Trash2, Loader2, Clock, Radio, Copy, ExternalLink,
   Lightbulb, HelpCircle, Star, TrendingUp, Settings, Code,
   Mail, Palette, Calendar, Edit, Save, RefreshCw, FileText, Eye,
-  Upload, ImagePlus, X, Bell, Link2, Download, Globe, Languages
+  Upload, ImagePlus, X, Bell, Link2, Download, Globe, Languages, Bot
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, LineChart, Line } from "recharts";
-import type { Webinar, FakeUser, ScheduledMessage, CtaButton, Poll, Registration, Tip, Question, FeedbackSurvey, Webhook } from "@shared/schema";
+import type { Webinar, FakeUser, ScheduledMessage, CtaButton, Poll, Registration, Tip, Question, FeedbackSurvey, Webhook, WebinarDocument } from "@shared/schema";
 import type { FeedbackResponse } from "@shared/schema";
 import { useAdminLang, type LangAdmin } from "@/hooks/use-lang";
 
@@ -112,6 +112,25 @@ const t: Record<LangAdmin, Record<string, string>> = {
     tabRegistrations: "報名",
     tabAnalytics: "分析",
     tabSettings: "設定",
+    tabAi: "AI 助教",
+    aiTitle: "AI 自動回覆設定",
+    aiDesc: "啟用後，當觀眾在聊天室提問，AI 會根據你提供的資料，以老師名義自動回覆該觀眾。",
+    aiEnabledLabel: "啟用 AI 自動回覆",
+    aiEnabledHint: "只會回覆「看起來像問題」的訊息，節省成本。",
+    aiTeacherName: "回覆時顯示的老師名稱",
+    aiTeacherNamePlaceholder: "例如：王老師",
+    aiSaveSettings: "儲存設定",
+    aiDocsTitle: "知識文檔",
+    aiDocsDesc: "貼上課程講義、產品資料、常見問答等內容，AI 會根據這些資料回答觀眾。",
+    aiAddDoc: "新增文檔",
+    aiDocDialogTitle: "新增知識文檔",
+    aiDocTitle: "標題",
+    aiDocTitlePlaceholder: "例如：課程大綱",
+    aiDocContent: "內容（直接貼上文字）",
+    aiDocContentPlaceholder: "在此貼上文字內容...",
+    aiNoDocs: "尚未新增任何文檔",
+    aiDocSaved: "文檔已新增",
+    aiSettingsSaved: "AI 設定已儲存",
     schedNavTitle: "排程",
     schedNavEventSettings: "活動設定",
     schedNavScheduledWebinars: "排程場次",
@@ -425,6 +444,25 @@ const t: Record<LangAdmin, Record<string, string>> = {
     tabRegistrations: "报名",
     tabAnalytics: "分析",
     tabSettings: "设置",
+    tabAi: "AI 助教",
+    aiTitle: "AI 自动回复设置",
+    aiDesc: "启用后，当观众在聊天室提问，AI 会根据你提供的资料，以老师名义自动回复该观众。",
+    aiEnabledLabel: "启用 AI 自动回复",
+    aiEnabledHint: "只会回复「看起来像问题」的消息，节省成本。",
+    aiTeacherName: "回复时显示的老师名称",
+    aiTeacherNamePlaceholder: "例如：王老师",
+    aiSaveSettings: "保存设置",
+    aiDocsTitle: "知识文档",
+    aiDocsDesc: "粘贴课程讲义、产品资料、常见问答等内容，AI 会根据这些资料回答观众。",
+    aiAddDoc: "新增文档",
+    aiDocDialogTitle: "新增知识文档",
+    aiDocTitle: "标题",
+    aiDocTitlePlaceholder: "例如：课程大纲",
+    aiDocContent: "内容（直接粘贴文字）",
+    aiDocContentPlaceholder: "在此粘贴文字内容...",
+    aiNoDocs: "尚未新增任何文档",
+    aiDocSaved: "文档已新增",
+    aiSettingsSaved: "AI 设置已保存",
     schedNavTitle: "排程",
     schedNavEventSettings: "活动设置",
     schedNavScheduledWebinars: "排程场次",
@@ -779,6 +817,12 @@ export default function AdminWebinarDetail() {
   const [newWebhookUrl, setNewWebhookUrl] = useState("");
   const [newWebhookSecret, setNewWebhookSecret] = useState("");
 
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiTeacherName, setAiTeacherName] = useState("");
+  const [isDocOpen, setIsDocOpen] = useState(false);
+  const [newDocTitle, setNewDocTitle] = useState("");
+  const [newDocContent, setNewDocContent] = useState("");
+
   const { data: webinar, isLoading: webinarLoading } = useQuery<Webinar>({
     queryKey: ["/api/webinars", id],
     enabled: !!id,
@@ -844,6 +888,11 @@ export default function AdminWebinarDetail() {
     enabled: !!id,
   });
 
+  const { data: documents } = useQuery<WebinarDocument[]>({
+    queryKey: ["/api/webinars", id, "documents"],
+    enabled: !!id,
+  });
+
   useEffect(() => {
     if (webinar) {
       const sm = webinar.scheduleMode as any;
@@ -871,6 +920,12 @@ export default function AdminWebinarDetail() {
         setBrandPrimaryColor(bs.primaryColor || "#667eea");
         setBrandSecondaryColor(bs.secondaryColor || "#764ba2");
         setBrandBackgroundColor(bs.backgroundColor || "#1a1a2e");
+      }
+
+      const ai = webinar.aiSettings as any;
+      if (ai) {
+        setAiEnabled(ai.enabled ?? false);
+        setAiTeacherName(ai.teacherName || "");
       }
 
       const es = webinar.emailSettings as any;
@@ -1106,6 +1161,47 @@ export default function AdminWebinarDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "webhooks"] });
       toast({ title: s.toastWebhookDeleted });
+    },
+  });
+
+  const saveAiSettings = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PATCH", `/api/webinars/${id}`, {
+        aiSettings: { enabled: aiEnabled, teacherName: aiTeacherName.trim() },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id] });
+      toast({ title: s.aiSettingsSaved });
+    },
+    onError: (error: Error) => {
+      toast({ title: s.toastSaveFailed, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const createDocument = useMutation({
+    mutationFn: async (data: { title: string; content: string }) => {
+      return apiRequest("POST", `/api/webinars/${id}/documents`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "documents"] });
+      setIsDocOpen(false);
+      setNewDocTitle("");
+      setNewDocContent("");
+      toast({ title: s.aiDocSaved });
+    },
+    onError: (error: Error) => {
+      toast({ title: s.toastCreateFailed, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteDocument = useMutation({
+    mutationFn: async (docId: string) => {
+      return apiRequest("DELETE", `/api/webinars/${id}/documents/${docId}`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "documents"] });
+      toast({ title: s.toastDeleted });
     },
   });
 
@@ -1361,6 +1457,10 @@ export default function AdminWebinarDetail() {
             <TabsTrigger value="settings" data-testid="tab-settings">
               <Settings className="h-4 w-4 mr-1" />
               {s.tabSettings}
+            </TabsTrigger>
+            <TabsTrigger value="ai" data-testid="tab-ai">
+              <Bot className="h-4 w-4 mr-1" />
+              {s.tabAi}
             </TabsTrigger>
           </TabsList>
 
@@ -3603,6 +3703,129 @@ export default function AdminWebinarDetail() {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">{s.settingsInlineNote}</p>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ===== AI 助教 Tab ===== */}
+          <TabsContent value="ai">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Bot className="h-5 w-5" />
+                    {s.aiTitle}
+                  </CardTitle>
+                  <CardDescription>{s.aiDesc}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <Label className="font-medium">{s.aiEnabledLabel}</Label>
+                      <p className="text-sm text-muted-foreground">{s.aiEnabledHint}</p>
+                    </div>
+                    <Switch
+                      checked={aiEnabled}
+                      onCheckedChange={setAiEnabled}
+                      data-testid="switch-ai-enabled"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{s.aiTeacherName}</Label>
+                    <Input
+                      value={aiTeacherName}
+                      onChange={(e) => setAiTeacherName(e.target.value)}
+                      placeholder={s.aiTeacherNamePlaceholder}
+                      data-testid="input-ai-teacher-name"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => saveAiSettings.mutate()}
+                    disabled={saveAiSettings.isPending}
+                    data-testid="button-save-ai-settings"
+                  >
+                    {saveAiSettings.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                    {s.aiSaveSettings}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      {s.aiDocsTitle}
+                    </CardTitle>
+                    <CardDescription>{s.aiDocsDesc}</CardDescription>
+                  </div>
+                  <Dialog open={isDocOpen} onOpenChange={setIsDocOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" data-testid="button-add-document">
+                        <Plus className="h-4 w-4 mr-1" />
+                        {s.aiAddDoc}
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>{s.aiDocDialogTitle}</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>{s.aiDocTitle}</Label>
+                          <Input
+                            value={newDocTitle}
+                            onChange={(e) => setNewDocTitle(e.target.value)}
+                            placeholder={s.aiDocTitlePlaceholder}
+                            data-testid="input-document-title"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{s.aiDocContent}</Label>
+                          <Textarea
+                            value={newDocContent}
+                            onChange={(e) => setNewDocContent(e.target.value)}
+                            placeholder={s.aiDocContentPlaceholder}
+                            rows={10}
+                            data-testid="input-document-content"
+                          />
+                        </div>
+                        <Button
+                          onClick={() => createDocument.mutate({ title: newDocTitle.trim(), content: newDocContent.trim() })}
+                          disabled={createDocument.isPending || !newDocTitle.trim() || !newDocContent.trim()}
+                          data-testid="button-save-document"
+                        >
+                          {createDocument.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          {s.btnCreate}
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  {documents && documents.length > 0 ? (
+                    <div className="space-y-2">
+                      {documents.map((doc) => (
+                        <div key={doc.id} className="flex items-start justify-between p-3 bg-muted rounded-md gap-3" data-testid={`card-document-${doc.id}`}>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium" data-testid={`text-document-title-${doc.id}`}>{doc.title}</p>
+                            <p className="text-sm text-muted-foreground line-clamp-2 whitespace-pre-wrap">{doc.content}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteDocument.mutate(doc.id)}
+                            data-testid={`button-delete-document-${doc.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">{s.aiNoDocs}</p>
+                  )}
                 </CardContent>
               </Card>
             </div>

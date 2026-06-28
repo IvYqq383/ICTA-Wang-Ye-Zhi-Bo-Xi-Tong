@@ -44,6 +44,12 @@ export const webinars = pgTable("webinars", {
     backgroundColor: string;
   }>(),
   
+  // AI 助教設定
+  aiSettings: jsonb("ai_settings").$type<{
+    enabled: boolean;       // 是否啟用 AI 自動回覆
+    teacherName: string;    // 回覆時顯示的老師名稱
+  }>().default({ enabled: false, teacherName: "" }),
+
   // 重播設定
   replayEnabled: boolean("replay_enabled").default(true),
   replayAvailableHours: integer("replay_available_hours").default(48), // 重播可用時數
@@ -405,3 +411,16 @@ export const webhooks = pgTable("webhooks", {
 export const insertWebhookSchema = createInsertSchema(webhooks).omit({ id: true, createdAt: true });
 export type InsertWebhook = z.infer<typeof insertWebhookSchema>;
 export type Webhook = typeof webhooks.$inferSelect;
+
+// Webinar Documents (AI 助教知識文檔)
+export const webinarDocuments = pgTable("webinar_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertWebinarDocumentSchema = createInsertSchema(webinarDocuments).omit({ id: true, createdAt: true });
+export type InsertWebinarDocument = z.infer<typeof insertWebinarDocumentSchema>;
+export type WebinarDocument = typeof webinarDocuments.$inferSelect;

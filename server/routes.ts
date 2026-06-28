@@ -22,10 +22,12 @@ import {
   insertViewerProgressSchema,
   insertWebinarSessionSchema,
   insertWebhookSchema,
+  insertWebinarDocumentSchema,
 } from "@shared/schema";
 
 import bcrypt from "bcryptjs";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
+import { looksLikeQuestion, answerViewerQuestion } from "./aiAssistant";
 
 declare module "express-session" {
   interface SessionData {
@@ -240,13 +242,17 @@ export async function registerRoutes(
           }
           
           case "chat": {
-            const { webinarId, sessionId, senderName, message: chatMessage, senderType } = message.data;
+            const { senderName, message: chatMessage } = message.data;
+
+            // Always use server-bound connection identity; never trust client-supplied
+            // webinarId/sessionId (prevents cross-webinar spoofing & AI cost abuse).
+            const webinarId = currentWebinarId;
+            if (!webinarId) break; // not joined yet
 
             // Host broadcast: requires server-verified host connection. Persist a single
             // canonical row (sessionId=null) and fan-out via WS to every connected viewer.
             // Per-session history reads include sessionId=null host rows, so reloads work.
-            if (!sessionId) {
-              if (!isHost) break; // reject impersonation from viewer sockets
+            if (isHost) {
               const saved = await storage.createChatMessage({
                 webinarId,
                 sessionId: null,
@@ -269,14 +275,16 @@ export async function registerRoutes(
               break;
             }
 
-            // Viewer sockets cannot impersonate as host on session-tagged chat
-            const safeSenderType = (!isHost && senderType === "host") ? "viewer" : (senderType || "viewer");
+            // Viewer: must have joined a session; session-tagged & always senderType "viewer"
+            const sessionId = currentSessionId;
+            if (!sessionId) break;
+
             const savedMessage = await storage.createChatMessage({
               webinarId,
               sessionId,
               senderName,
               message: chatMessage,
-              senderType: safeSenderType,
+              senderType: "viewer",
               isPrivate: true
             });
             
@@ -292,6 +300,11 @@ export async function registerRoutes(
               type: "chat",
               data: { ...savedMessage, sessionId }
             }, ws);
+
+            // AI 助教：只對「看起來像問題」的觀眾訊息回覆（省成本）
+            maybeAiReply(webinarId, sessionId, chatMessage).catch((err) =>
+              console.error("AI reply failed:", err)
+            );
             break;
           }
           
@@ -458,6 +471,38 @@ export async function registerRoutes(
         }
       });
     }
+  }
+
+  // AI 助教：判斷觀眾訊息是否為問題，是則用文檔回答，以老師名義私訊回覆該觀眾
+  async function maybeAiReply(webinarId: string, sessionId: string, viewerMessage: string) {
+    const webinar = await storage.getWebinar(webinarId);
+    const ai = webinar?.aiSettings;
+    if (!webinar || !ai?.enabled) return;
+    if (!looksLikeQuestion(viewerMessage)) return;
+
+    const teacherName = (ai.teacherName || "").trim() || "老師";
+    const answer = await answerViewerQuestion(
+      webinarId,
+      webinar.title,
+      teacherName,
+      viewerMessage
+    );
+    if (!answer) return;
+
+    const savedMessage = await storage.createChatMessage({
+      webinarId,
+      sessionId,
+      senderName: teacherName,
+      message: answer,
+      senderType: "host",
+      isPrivate: true,
+    });
+
+    const viewerWs = sessionConnections.get(sessionId);
+    if (viewerWs && viewerWs.readyState === WebSocket.OPEN) {
+      viewerWs.send(JSON.stringify({ type: "chat", data: savedMessage }));
+    }
+    broadcastToHosts(webinarId, { type: "chat", data: { ...savedMessage, sessionId } });
   }
 
   // ============ Auth Routes ============
@@ -1561,6 +1606,27 @@ export async function registerRoutes(
 
   app.delete("/api/webinars/:id/webhooks/:hookId", requireWebinarOwner, async (req, res) => {
     await storage.deleteWebhook(req.params.hookId as string);
+    res.json({ success: true });
+  });
+
+  // ============ AI 助教知識文檔 ============
+  app.get("/api/webinars/:id/documents", requireWebinarOwner, async (req, res) => {
+    const docs = await storage.getWebinarDocuments(req.params.id as string);
+    res.json(docs);
+  });
+
+  app.post("/api/webinars/:id/documents", requireWebinarOwner, async (req, res) => {
+    try {
+      const data = insertWebinarDocumentSchema.parse({ ...req.body, webinarId: req.params.id });
+      const doc = await storage.createWebinarDocument(data);
+      res.json(doc);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/webinars/:id/documents/:docId", requireWebinarOwner, async (req, res) => {
+    await storage.deleteWebinarDocument(req.params.id as string, req.params.docId as string);
     res.json({ success: true });
   });
 
