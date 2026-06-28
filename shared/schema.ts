@@ -46,9 +46,50 @@ export const webinars = pgTable("webinars", {
   
   // AI 助教設定
   aiSettings: jsonb("ai_settings").$type<{
-    enabled: boolean;       // 是否啟用 AI 自動回覆
-    teacherName: string;    // 回覆時顯示的老師名稱
+    enabled: boolean;        // 是否啟用 AI 自動回覆
+    teacherName: string;     // 回覆時顯示的老師名稱
+    fallbackMessage?: string; // 答不出來時的自訂回覆（空 = 用預設行為）
   }>().default({ enabled: false, teacherName: "" }),
+
+  // 報名表單自訂欄位
+  customFields: jsonb("custom_fields").$type<Array<{
+    id: string;
+    label: string;
+    type: "text" | "textarea" | "select" | "checkbox";
+    required: boolean;
+    options?: string[]; // for select
+  }>>().default([]),
+
+  // 稀缺感 / 倒數設定
+  scarcitySettings: jsonb("scarcity_settings").$type<{
+    countdownEnabled: boolean; // 報名頁顯示距開始倒數
+    seatsEnabled: boolean;     // 顯示名額有限
+    totalSeats: number;        // 總名額
+    urgencyText: string;       // 自訂催促文字
+  }>().default({ countdownEnabled: false, seatsEnabled: false, totalSeats: 100, urgencyText: "" }),
+
+  // 感謝頁（報名完成）自訂
+  thankYouSettings: jsonb("thank_you_settings").$type<{
+    enabled: boolean;
+    headline: string;
+    message: string;
+    ctaText: string;
+    ctaUrl: string;
+  }>().default({ enabled: false, headline: "", message: "", ctaText: "", ctaUrl: "" }),
+
+  // 重播 / 結束頁自訂
+  replaySettings: jsonb("replay_settings").$type<{
+    headline: string;
+    message: string;
+    ctaText: string;
+    ctaUrl: string;
+  }>().default({ headline: "", message: "", ctaText: "", ctaUrl: "" }),
+
+  // 通知設定（有人發問時通知主持人）
+  notifySettings: jsonb("notify_settings").$type<{
+    questionEmailEnabled: boolean;
+    notifyEmail: string; // 留空則寄給帳號 Email
+  }>().default({ questionEmailEnabled: false, notifyEmail: "" }),
 
   // 重播設定
   replayEnabled: boolean("replay_enabled").default(true),
@@ -110,6 +151,12 @@ export const registrations = pgTable("registrations", {
   
   // 選擇的場次（用於循環排程）
   selectedSession: timestamp("selected_session"),
+
+  // 報名表單自訂欄位回答
+  customFieldData: jsonb("custom_field_data").$type<Record<string, string>>().default({}),
+
+  // 報名者標籤 / 分群
+  tags: text("tags").array().default(sql`'{}'::text[]`),
 });
 
 export const insertRegistrationSchema = createInsertSchema(registrations).omit({ 

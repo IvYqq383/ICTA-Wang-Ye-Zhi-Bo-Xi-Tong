@@ -6,11 +6,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { apiRequest } from "@/lib/queryClient";
-import { Calendar, Clock, CheckCircle, Loader2, Play, Zap, ChevronDown } from "lucide-react";
+import { Calendar, Clock, CheckCircle, Loader2, Play, Zap, ChevronDown, Users } from "lucide-react";
 import type { Webinar } from "@shared/schema";
+
+type CustomField = { id: string; label: string; type: "text" | "textarea" | "select" | "checkbox"; required: boolean; options?: string[] };
 
 interface AvailableSessionsResponse {
   mode: "fixed" | "recurring" | "onDemand" | "justInTime";
@@ -34,6 +40,9 @@ export default function EmbedRegister() {
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [showSessionPicker, setShowSessionPicker] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, boolean>>({});
+  const [now, setNow] = useState(Date.now());
 
   const { data: webinar, isLoading } = useQuery<Webinar>({
     queryKey: ["/api/webinars", id],
@@ -42,6 +51,11 @@ export default function EmbedRegister() {
 
   const { data: availableSessions } = useQuery<AvailableSessionsResponse>({
     queryKey: ["/api/webinars", id, "available-sessions"],
+    enabled: !!id,
+  });
+
+  const { data: regCount } = useQuery<{ count: number }>({
+    queryKey: ["/api/webinars", id, "registration-count"],
     enabled: !!id,
   });
 
@@ -65,6 +79,9 @@ export default function EmbedRegister() {
       };
       if (selectedSession) {
         payload.selectedSession = selectedSession;
+      }
+      if (Object.keys(customFieldValues).length > 0) {
+        payload.customFieldData = customFieldValues;
       }
       return apiRequest("POST", "/api/registrations", payload);
     },
@@ -101,6 +118,11 @@ export default function EmbedRegister() {
     };
   }, []);
 
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const formatDate = (date: string | Date) => {
     return new Date(date).toLocaleString("zh-TW", {
       year: "numeric", month: "long", day: "numeric",
@@ -127,6 +149,40 @@ export default function EmbedRegister() {
   const mode = availableSessions?.mode || "fixed";
   const hasSessions = availableSessions?.hasSessions || false;
   const hasMultipleSessions = hasSessions && availableSessions && availableSessions.sessions.length > 1;
+
+  const customFields = (webinar?.customFields as CustomField[]) || [];
+  const scarcity = webinar?.scarcitySettings as { countdownEnabled: boolean; seatsEnabled: boolean; totalSeats: number; urgencyText: string } | null;
+  const thankYou = webinar?.thankYouSettings as { enabled: boolean; headline: string; message: string; ctaText: string; ctaUrl: string } | null;
+
+  const countdownTarget = selectedSession
+    ? new Date(selectedSession).getTime()
+    : (hasSessions && availableSessions?.sessions?.[0]?.scheduledStart
+        ? new Date(availableSessions.sessions[0].scheduledStart).getTime()
+        : (webinar?.startTime ? new Date(webinar.startTime).getTime() : 0));
+  const countdownMs = countdownTarget - now;
+  const showCountdown = scarcity?.countdownEnabled && mode !== "onDemand" && countdownMs > 0;
+  const cdDays = Math.floor(countdownMs / 86400000);
+  const cdHours = Math.floor((countdownMs % 86400000) / 3600000);
+  const cdMins = Math.floor((countdownMs % 3600000) / 60000);
+  const cdSecs = Math.floor((countdownMs % 60000) / 1000);
+
+  const validateAndSubmit = (data: RegistrationForm) => {
+    setErrorMessage(null);
+    const errors: Record<string, boolean> = {};
+    customFields.forEach((f) => {
+      if (f.required) {
+        const v = customFieldValues[f.id];
+        if (f.type === "checkbox") {
+          if (v !== "true") errors[f.id] = true;
+        } else if (!v || !v.trim()) {
+          errors[f.id] = true;
+        }
+      }
+    });
+    setCustomFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    registerMutation.mutate(data);
+  };
 
   const groupedSessions: Record<string, Array<{ id: string; scheduledStart: string; status: string }>> = {};
   if (availableSessions?.sessions) {
@@ -162,8 +218,12 @@ export default function EmbedRegister() {
         <div className="w-14 h-14 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
           <CheckCircle className="h-7 w-7 text-green-600" />
         </div>
-        <h3 className="text-xl font-bold mb-2" data-testid="text-embed-success">報名成功！</h3>
-        <p className="text-sm text-muted-foreground mb-4">確認信已發送至您的 Email</p>
+        <h3 className="text-xl font-bold mb-2" data-testid="text-embed-success">
+          {thankYou?.enabled && thankYou.headline ? thankYou.headline : "報名成功！"}
+        </h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          {thankYou?.enabled && thankYou.message ? thankYou.message : "確認信已發送至您的 Email"}
+        </p>
         <div className="bg-muted rounded-md p-3 mb-4">
           <h4 className="font-semibold text-sm mb-1">{webinar.title}</h4>
           {mode === "onDemand" ? (
@@ -178,9 +238,20 @@ export default function EmbedRegister() {
             </div>
           )}
         </div>
+        {thankYou?.enabled && thankYou.ctaText && thankYou.ctaUrl && (
+          <Button
+            className="w-full mb-2"
+            style={{ backgroundColor: accentColor }}
+            onClick={() => window.open(thankYou.ctaUrl, "_blank")}
+            data-testid="button-embed-thankyou-cta"
+          >
+            {thankYou.ctaText}
+          </Button>
+        )}
         <Button
           className="w-full"
-          style={{ backgroundColor: accentColor }}
+          variant={thankYou?.enabled && thankYou.ctaText && thankYou.ctaUrl ? "outline" : "default"}
+          style={thankYou?.enabled && thankYou.ctaText && thankYou.ctaUrl ? undefined : { backgroundColor: accentColor }}
           onClick={() => window.open(`${window.location.origin}/webinar/${id}`, "_blank")}
           data-testid="button-embed-enter-webinar"
         >
@@ -210,6 +281,44 @@ export default function EmbedRegister() {
       <h3 className="text-lg font-bold text-center mb-1" data-testid="text-embed-title">{webinar.title}</h3>
       {webinar.description && (
         <p className="text-xs text-muted-foreground text-center mb-3">{webinar.description}</p>
+      )}
+
+      {showCountdown && (
+        <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-md" data-testid="card-embed-countdown">
+          <div className="flex items-center justify-center gap-1.5 text-xs font-medium text-primary mb-2">
+            <Clock className="h-3.5 w-3.5" />
+            <span>距離開始還有</span>
+          </div>
+          <div className="flex items-center justify-center gap-2 text-center">
+            {[
+              { v: cdDays, l: "天" },
+              { v: cdHours, l: "時" },
+              { v: cdMins, l: "分" },
+              { v: cdSecs, l: "秒" },
+            ].map((u, i) => (
+              <div key={i} className="flex flex-col items-center">
+                <span className="text-lg font-bold tabular-nums">{String(u.v).padStart(2, "0")}</span>
+                <span className="text-[10px] text-muted-foreground">{u.l}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {scarcity?.seatsEnabled && (
+        <div className="flex items-center justify-center gap-1.5 mb-4 p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md" data-testid="card-embed-scarcity-seats">
+          <Users className="h-4 w-4 text-amber-600" />
+          <span className="text-xs font-medium text-amber-800 dark:text-amber-300">
+            {scarcity.urgencyText || `名額有限，僅剩 ${Math.max(scarcity.totalSeats - (regCount?.count || 0), 1)} 個名額`}
+          </span>
+        </div>
+      )}
+
+      {!scarcity?.seatsEnabled && scarcity?.urgencyText && (
+        <div className="flex items-center justify-center gap-1.5 mb-4 p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md" data-testid="card-embed-scarcity-urgency">
+          <Zap className="h-4 w-4 text-amber-600" />
+          <span className="text-xs font-medium text-amber-800 dark:text-amber-300">{scarcity.urgencyText}</span>
+        </div>
       )}
 
       {mode === "onDemand" && (
@@ -292,10 +401,7 @@ export default function EmbedRegister() {
 
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit((data) => {
-            setErrorMessage(null);
-            registerMutation.mutate(data);
-          })}
+          onSubmit={form.handleSubmit(validateAndSubmit)}
           className="space-y-3"
         >
           <FormField
@@ -337,6 +443,65 @@ export default function EmbedRegister() {
               </FormItem>
             )}
           />
+
+          {customFields.map((cf) => (
+            <div key={cf.id} className="space-y-1.5" data-testid={`field-embed-custom-${cf.id}`}>
+              {cf.type !== "checkbox" && (
+                <Label className="text-xs font-medium">
+                  {cf.label}
+                  {cf.required && <span className="text-destructive ml-1">*</span>}
+                </Label>
+              )}
+              {cf.type === "text" && (
+                <Input
+                  value={customFieldValues[cf.id] || ""}
+                  onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))}
+                  placeholder={cf.label}
+                  data-testid={`input-embed-custom-${cf.id}`}
+                />
+              )}
+              {cf.type === "textarea" && (
+                <Textarea
+                  value={customFieldValues[cf.id] || ""}
+                  onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))}
+                  placeholder={cf.label}
+                  rows={2}
+                  data-testid={`input-embed-custom-${cf.id}`}
+                />
+              )}
+              {cf.type === "select" && (
+                <Select
+                  value={customFieldValues[cf.id] || ""}
+                  onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [cf.id]: v }))}
+                >
+                  <SelectTrigger data-testid={`select-embed-custom-${cf.id}`}>
+                    <SelectValue placeholder={cf.label} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(cf.options || []).map((opt, i) => (
+                      <SelectItem key={i} value={opt}>{opt}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {cf.type === "checkbox" && (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={customFieldValues[cf.id] === "true"}
+                    onCheckedChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [cf.id]: v ? "true" : "false" }))}
+                    data-testid={`checkbox-embed-custom-${cf.id}`}
+                  />
+                  <Label className="text-xs font-medium">
+                    {cf.label}
+                    {cf.required && <span className="text-destructive ml-1">*</span>}
+                  </Label>
+                </div>
+              )}
+              {customFieldErrors[cf.id] && (
+                <p className="text-[10px] text-destructive" data-testid={`error-embed-custom-${cf.id}`}>此欄位為必填</p>
+              )}
+            </div>
+          ))}
 
           {errorMessage && (
             <p className="text-xs text-destructive text-center" data-testid="text-embed-error">{errorMessage}</p>

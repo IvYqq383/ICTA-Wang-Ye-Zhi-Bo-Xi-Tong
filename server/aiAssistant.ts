@@ -33,11 +33,14 @@ export function looksLikeQuestion(text: string): boolean {
 }
 
 // 用文檔內容回答觀眾問題，以老師名義
+const NO_ANSWER_TOKEN = "[[NO_ANSWER]]";
+
 export async function answerViewerQuestion(
   webinarId: string,
   webinarTitle: string,
   teacherName: string,
   question: string,
+  fallbackMessage?: string,
 ): Promise<string | null> {
   try {
     const docs = await storage.getWebinarDocuments(webinarId);
@@ -60,7 +63,9 @@ export async function answerViewerQuestion(
       hasKnowledge
         ? `以下是本研討會的相關資料，請優先根據這些資料回答：\n\n${knowledge}`
         : `目前沒有提供額外資料，請依你的專業常識友善回答；若超出研討會主題範圍，可禮貌引導觀眾稍後私訊或聯繫主辦團隊。`,
-      `若資料中找不到答案，不要編造，誠實說明你會請團隊後續補充，或建議觀眾留下聯絡方式。`,
+      fallbackMessage && fallbackMessage.trim()
+        ? `若你無法根據以上資料或專業常識確定答案，請「只」輸出這個標記：${NO_ANSWER_TOKEN}（不要加任何其他文字）。`
+        : `若資料中找不到答案，不要編造，誠實說明你會請團隊後續補充，或建議觀眾留下聯絡方式。`,
       `絕對不要提到「資料」「文檔」「AI」「系統提示」這類字眼，要表現得像老師本人在回答。`,
     ].join("\n\n");
 
@@ -73,7 +78,13 @@ export async function answerViewerQuestion(
 
     const block = response.content[0];
     const text = block && block.type === "text" ? block.text.trim() : "";
-    return text || null;
+    if (!text) return null;
+
+    // AI 判定答不出來 → 用自訂回覆
+    if (text.includes(NO_ANSWER_TOKEN)) {
+      return (fallbackMessage && fallbackMessage.trim()) || null;
+    }
+    return text;
   } catch (error) {
     console.error("AI answer error:", error);
     return null;

@@ -131,6 +131,59 @@ const t: Record<LangAdmin, Record<string, string>> = {
     aiNoDocs: "尚未新增任何文檔",
     aiDocSaved: "文檔已新增",
     aiSettingsSaved: "AI 設定已儲存",
+    aiFallbackLabel: "答不出來時的自訂回覆",
+    aiFallbackHint: "AI 無法從文檔找到答案時，會改用這段話回覆（留空則用預設行為）。",
+    aiFallbackPlaceholder: "例如：這題我等等私訊您詳細說明～",
+    cfTitle: "報名表單自訂欄位",
+    cfDesc: "除了姓名/Email/電話，可額外蒐集公司、職稱、問題等資訊。",
+    cfAddField: "新增欄位",
+    cfLabel: "欄位名稱",
+    cfLabelPlaceholder: "例如：公司名稱",
+    cfType: "欄位類型",
+    cfTypeText: "單行文字",
+    cfTypeTextarea: "多行文字",
+    cfTypeSelect: "下拉選單",
+    cfTypeCheckbox: "勾選框",
+    cfRequired: "必填",
+    cfOptions: "選項（逗號分隔）",
+    cfOptionsPlaceholder: "選項A, 選項B, 選項C",
+    cfSave: "儲存欄位",
+    cfSaved: "自訂欄位已儲存",
+    cfNoFields: "尚未新增自訂欄位",
+    scTitle: "稀缺感 / 倒數",
+    scDesc: "在報名頁營造急迫感，提升報名與出席率。",
+    scCountdown: "顯示距開始倒數",
+    scCountdownHint: "報名頁顯示「距開始 03:42」倒數計時。",
+    scSeats: "顯示名額有限",
+    scSeatsHint: "顯示剩餘名額，營造稀缺感。",
+    scTotalSeats: "總名額",
+    scUrgency: "自訂催促文字",
+    scUrgencyPlaceholder: "例如：名額有限，立即報名！",
+    scSave: "儲存設定",
+    scSaved: "稀缺感設定已儲存",
+    pgTitle: "感謝頁 / 重播頁",
+    pgThankYou: "感謝頁（報名完成後）",
+    pgThankYouEnable: "啟用自訂感謝頁",
+    pgReplay: "重播 / 結束頁",
+    pgHeadline: "標題",
+    pgMessage: "訊息內容",
+    pgCtaText: "按鈕文字",
+    pgCtaUrl: "按鈕連結",
+    pgSave: "儲存頁面設定",
+    pgSaved: "頁面設定已儲存",
+    ntQuestionNotify: "有人發問時通知我",
+    ntQuestionNotifyHint: "觀眾提交問題時，寄 Email 通知主持人。",
+    ntEmail: "通知 Email（留空則寄到帳號 Email）",
+    ntSave: "儲存通知設定",
+    ntSaved: "通知設定已儲存",
+    tagLabel: "標籤",
+    tagEdit: "編輯標籤",
+    tagPlaceholder: "標籤以逗號分隔，例如：VIP, 已聯絡",
+    tagSave: "儲存",
+    tagCancel: "取消",
+    tagSaved: "標籤已更新",
+    tagFilter: "依標籤篩選",
+    tagAll: "全部",
     schedNavTitle: "排程",
     schedNavEventSettings: "活動設定",
     schedNavScheduledWebinars: "排程場次",
@@ -463,6 +516,59 @@ const t: Record<LangAdmin, Record<string, string>> = {
     aiNoDocs: "尚未新增任何文档",
     aiDocSaved: "文档已新增",
     aiSettingsSaved: "AI 设置已保存",
+    aiFallbackLabel: "答不出来时的自订回复",
+    aiFallbackHint: "AI 无法从文档找到答案时，会改用这段话回复（留空则用预设行为）。",
+    aiFallbackPlaceholder: "例如：这题我等等私讯您详细说明～",
+    cfTitle: "报名表单自订栏位",
+    cfDesc: "除了姓名/Email/电话，可额外搜集公司、职称、问题等资讯。",
+    cfAddField: "新增栏位",
+    cfLabel: "栏位名称",
+    cfLabelPlaceholder: "例如：公司名称",
+    cfType: "栏位类型",
+    cfTypeText: "单行文字",
+    cfTypeTextarea: "多行文字",
+    cfTypeSelect: "下拉选单",
+    cfTypeCheckbox: "勾选框",
+    cfRequired: "必填",
+    cfOptions: "选项（逗号分隔）",
+    cfOptionsPlaceholder: "选项A, 选项B, 选项C",
+    cfSave: "储存栏位",
+    cfSaved: "自订栏位已储存",
+    cfNoFields: "尚未新增自订栏位",
+    scTitle: "稀缺感 / 倒数",
+    scDesc: "在报名页营造急迫感，提升报名与出席率。",
+    scCountdown: "显示距开始倒数",
+    scCountdownHint: "报名页显示「距开始 03:42」倒数计时。",
+    scSeats: "显示名额有限",
+    scSeatsHint: "显示剩余名额，营造稀缺感。",
+    scTotalSeats: "总名额",
+    scUrgency: "自订催促文字",
+    scUrgencyPlaceholder: "例如：名额有限，立即报名！",
+    scSave: "储存设置",
+    scSaved: "稀缺感设置已保存",
+    pgTitle: "感谢页 / 重播页",
+    pgThankYou: "感谢页（报名完成后）",
+    pgThankYouEnable: "启用自订感谢页",
+    pgReplay: "重播 / 结束页",
+    pgHeadline: "标题",
+    pgMessage: "讯息内容",
+    pgCtaText: "按钮文字",
+    pgCtaUrl: "按钮连结",
+    pgSave: "储存页面设置",
+    pgSaved: "页面设置已保存",
+    ntQuestionNotify: "有人发问时通知我",
+    ntQuestionNotifyHint: "观众提交问题时，寄 Email 通知主持人。",
+    ntEmail: "通知 Email（留空则寄到账号 Email）",
+    ntSave: "储存通知设置",
+    ntSaved: "通知设置已保存",
+    tagLabel: "标签",
+    tagEdit: "编辑标签",
+    tagPlaceholder: "标签以逗号分隔，例如：VIP, 已联络",
+    tagSave: "储存",
+    tagCancel: "取消",
+    tagSaved: "标签已更新",
+    tagFilter: "依标签筛选",
+    tagAll: "全部",
     schedNavTitle: "排程",
     schedNavEventSettings: "活动设置",
     schedNavScheduledWebinars: "排程场次",
@@ -819,9 +925,36 @@ export default function AdminWebinarDetail() {
 
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiTeacherName, setAiTeacherName] = useState("");
+  const [aiFallback, setAiFallback] = useState("");
   const [isDocOpen, setIsDocOpen] = useState(false);
   const [newDocTitle, setNewDocTitle] = useState("");
   const [newDocContent, setNewDocContent] = useState("");
+
+  type CustomField = { id: string; label: string; type: "text" | "textarea" | "select" | "checkbox"; required: boolean; options?: string[] };
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+
+  const [scarcityCountdown, setScarcityCountdown] = useState(false);
+  const [scarcitySeats, setScarcitySeats] = useState(false);
+  const [scarcityTotalSeats, setScarcityTotalSeats] = useState("100");
+  const [scarcityUrgency, setScarcityUrgency] = useState("");
+
+  const [thankYouEnabled, setThankYouEnabled] = useState(false);
+  const [thankYouHeadline, setThankYouHeadline] = useState("");
+  const [thankYouMessage, setThankYouMessage] = useState("");
+  const [thankYouCtaText, setThankYouCtaText] = useState("");
+  const [thankYouCtaUrl, setThankYouCtaUrl] = useState("");
+
+  const [replayHeadline, setReplayHeadline] = useState("");
+  const [replayMessage, setReplayMessage] = useState("");
+  const [replayCtaText, setReplayCtaText] = useState("");
+  const [replayCtaUrl, setReplayCtaUrl] = useState("");
+
+  const [notifyQuestionEmail, setNotifyQuestionEmail] = useState(false);
+  const [notifyEmail, setNotifyEmail] = useState("");
+
+  const [editTagsRegId, setEditTagsRegId] = useState<string | null>(null);
+  const [editTagsValue, setEditTagsValue] = useState("");
+  const [tagFilter, setTagFilter] = useState("__all__");
 
   const { data: webinar, isLoading: webinarLoading } = useQuery<Webinar>({
     queryKey: ["/api/webinars", id],
@@ -926,6 +1059,40 @@ export default function AdminWebinarDetail() {
       if (ai) {
         setAiEnabled(ai.enabled ?? false);
         setAiTeacherName(ai.teacherName || "");
+        setAiFallback(ai.fallbackMessage || "");
+      }
+
+      setCustomFields(((webinar.customFields as CustomField[]) || []));
+
+      const sc = webinar.scarcitySettings as any;
+      if (sc) {
+        setScarcityCountdown(sc.countdownEnabled ?? false);
+        setScarcitySeats(sc.seatsEnabled ?? false);
+        setScarcityTotalSeats(String(sc.totalSeats ?? 100));
+        setScarcityUrgency(sc.urgencyText || "");
+      }
+
+      const ty = webinar.thankYouSettings as any;
+      if (ty) {
+        setThankYouEnabled(ty.enabled ?? false);
+        setThankYouHeadline(ty.headline || "");
+        setThankYouMessage(ty.message || "");
+        setThankYouCtaText(ty.ctaText || "");
+        setThankYouCtaUrl(ty.ctaUrl || "");
+      }
+
+      const rp = webinar.replaySettings as any;
+      if (rp) {
+        setReplayHeadline(rp.headline || "");
+        setReplayMessage(rp.message || "");
+        setReplayCtaText(rp.ctaText || "");
+        setReplayCtaUrl(rp.ctaUrl || "");
+      }
+
+      const ns = webinar.notifySettings as any;
+      if (ns) {
+        setNotifyQuestionEmail(ns.questionEmailEnabled ?? false);
+        setNotifyEmail(ns.notifyEmail || "");
       }
 
       const es = webinar.emailSettings as any;
@@ -1167,12 +1334,102 @@ export default function AdminWebinarDetail() {
   const saveAiSettings = useMutation({
     mutationFn: async () => {
       return apiRequest("PATCH", `/api/webinars/${id}`, {
-        aiSettings: { enabled: aiEnabled, teacherName: aiTeacherName.trim() },
+        aiSettings: { enabled: aiEnabled, teacherName: aiTeacherName.trim(), fallbackMessage: aiFallback.trim() },
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/webinars", id] });
       toast({ title: s.aiSettingsSaved });
+    },
+    onError: (error: Error) => {
+      toast({ title: s.toastSaveFailed, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const saveCustomFields = useMutation({
+    mutationFn: async (fields: CustomField[]) => {
+      return apiRequest("PATCH", `/api/webinars/${id}`, { customFields: fields });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id] });
+      toast({ title: s.cfSaved });
+    },
+    onError: (error: Error) => {
+      toast({ title: s.toastSaveFailed, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const saveScarcity = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PATCH", `/api/webinars/${id}`, {
+        scarcitySettings: {
+          countdownEnabled: scarcityCountdown,
+          seatsEnabled: scarcitySeats,
+          totalSeats: parseInt(scarcityTotalSeats) || 100,
+          urgencyText: scarcityUrgency.trim(),
+        },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id] });
+      toast({ title: s.scSaved });
+    },
+    onError: (error: Error) => {
+      toast({ title: s.toastSaveFailed, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const savePages = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PATCH", `/api/webinars/${id}`, {
+        thankYouSettings: {
+          enabled: thankYouEnabled,
+          headline: thankYouHeadline.trim(),
+          message: thankYouMessage.trim(),
+          ctaText: thankYouCtaText.trim(),
+          ctaUrl: thankYouCtaUrl.trim(),
+        },
+        replaySettings: {
+          headline: replayHeadline.trim(),
+          message: replayMessage.trim(),
+          ctaText: replayCtaText.trim(),
+          ctaUrl: replayCtaUrl.trim(),
+        },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id] });
+      toast({ title: s.pgSaved });
+    },
+    onError: (error: Error) => {
+      toast({ title: s.toastSaveFailed, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const saveNotify = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PATCH", `/api/webinars/${id}`, {
+        notifySettings: { questionEmailEnabled: notifyQuestionEmail, notifyEmail: notifyEmail.trim() },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id] });
+      toast({ title: s.ntSaved });
+    },
+    onError: (error: Error) => {
+      toast({ title: s.toastSaveFailed, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const saveRegTags = useMutation({
+    mutationFn: async ({ regId, tags }: { regId: string; tags: string[] }) => {
+      return apiRequest("PATCH", `/api/webinars/${id}/registrations/${regId}/tags`, { tags });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "registrations"] });
+      setEditTagsRegId(null);
+      setEditTagsValue("");
+      toast({ title: s.tagSaved });
     },
     onError: (error: Error) => {
       toast({ title: s.toastSaveFailed, description: error.message, variant: "destructive" });
@@ -1991,6 +2248,43 @@ export default function AdminWebinarDetail() {
           {/* ===== Notifications Tab ===== */}
           <TabsContent value="notifications">
             <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Bell className="h-4 w-4" />
+                    {s.ntQuestionNotify}
+                  </CardTitle>
+                  <CardDescription>{s.ntQuestionNotifyHint}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>{s.ntQuestionNotify}</Label>
+                    <Switch
+                      checked={notifyQuestionEmail}
+                      onCheckedChange={setNotifyQuestionEmail}
+                      data-testid="switch-notify-question"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{s.ntEmail}</Label>
+                    <Input
+                      type="email"
+                      value={notifyEmail}
+                      onChange={(e) => setNotifyEmail(e.target.value)}
+                      placeholder="name@example.com"
+                      data-testid="input-notify-email"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => saveNotify.mutate()}
+                    disabled={saveNotify.isPending}
+                    data-testid="button-save-notify"
+                  >
+                    {saveNotify.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                    {s.ntSave}
+                  </Button>
+                </CardContent>
+              </Card>
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
@@ -2995,52 +3289,110 @@ export default function AdminWebinarDetail() {
                   <CardTitle className="text-base">{s.regTitle}</CardTitle>
                   <CardDescription>{s.regDesc}</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => window.open(`/api/webinars/${id}/registrations/export`, "_blank")} data-testid="button-export-csv">
-                  <Download className="h-4 w-4 mr-1" />
-                  {s.regExportCsv}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Select value={tagFilter} onValueChange={setTagFilter}>
+                    <SelectTrigger className="w-[160px] h-9" data-testid="select-tag-filter">
+                      <SelectValue placeholder={s.tagFilter} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">{s.tagAll}</SelectItem>
+                      {Array.from(new Set((registrations || []).flatMap((r) => r.tags || []))).map((tag) => (
+                        <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="sm" onClick={() => window.open(`/api/webinars/${id}/registrations/export`, "_blank")} data-testid="button-export-csv">
+                    <Download className="h-4 w-4 mr-1" />
+                    {s.regExportCsv}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {registrations && registrations.length > 0 ? (
                   <ScrollArea className="h-[400px]">
                     <div className="space-y-2">
-                      {registrations.map((reg) => (
-                        <div key={reg.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
-                          <div>
-                            <p className="font-medium">{reg.name}</p>
-                            {reg.phone && <p className="text-sm text-muted-foreground">{reg.phone}</p>}
-                            <p className="text-sm text-muted-foreground">{reg.email}</p>
-                            {(reg.utmSource || reg.utmMedium || reg.utmCampaign) && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {reg.utmSource && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {s.regSource} {reg.utmSource}
-                                  </Badge>
-                                )}
-                                {reg.utmMedium && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {s.regMedium} {reg.utmMedium}
-                                  </Badge>
-                                )}
-                                {reg.utmCampaign && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {s.regCampaign} {reg.utmCampaign}
-                                  </Badge>
-                                )}
+                      {registrations
+                        .filter((reg) => tagFilter === "__all__" || (reg.tags || []).includes(tagFilter))
+                        .map((reg) => (
+                        <div key={reg.id} className="p-3 bg-muted rounded-md" data-testid={`row-registration-${reg.id}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="font-medium">{reg.name}</p>
+                              {reg.phone && <p className="text-sm text-muted-foreground">{reg.phone}</p>}
+                              <p className="text-sm text-muted-foreground">{reg.email}</p>
+                              {(reg.utmSource || reg.utmMedium || reg.utmCampaign) && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {reg.utmSource && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {s.regSource} {reg.utmSource}
+                                    </Badge>
+                                  )}
+                                  {reg.utmMedium && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {s.regMedium} {reg.utmMedium}
+                                    </Badge>
+                                  )}
+                                  {reg.utmCampaign && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {s.regCampaign} {reg.utmCampaign}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+                              {(reg.tags || []).length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {(reg.tags || []).map((tag, i) => (
+                                    <Badge key={i} className="text-xs" data-testid={`badge-tag-${reg.id}-${i}`}>{tag}</Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(reg.registeredAt!).toLocaleString(lang)}
+                              </p>
+                              {reg.attended && (
+                                <Badge variant="secondary" className="text-xs mt-1">
+                                  <Star className="h-3 w-3 mr-1" />
+                                  {s.regAttended}
+                                </Badge>
+                              )}
+                              <div className="mt-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => { setEditTagsRegId(reg.id); setEditTagsValue((reg.tags || []).join(", ")); }}
+                                  data-testid={`button-edit-tags-${reg.id}`}
+                                >
+                                  {s.tagEdit}
+                                </Button>
                               </div>
-                            )}
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(reg.registeredAt!).toLocaleString(lang)}
-                            </p>
-                            {reg.attended && (
-                              <Badge variant="secondary" className="text-xs mt-1">
-                                <Star className="h-3 w-3 mr-1" />
-                                {s.regAttended}
-                              </Badge>
-                            )}
-                          </div>
+                          {editTagsRegId === reg.id && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <Input
+                                value={editTagsValue}
+                                onChange={(e) => setEditTagsValue(e.target.value)}
+                                placeholder={s.tagPlaceholder}
+                                className="h-8 text-sm"
+                                data-testid={`input-tags-${reg.id}`}
+                              />
+                              <Button
+                                size="sm"
+                                className="h-8"
+                                disabled={saveRegTags.isPending}
+                                onClick={() => saveRegTags.mutate({ regId: reg.id, tags: editTagsValue.split(",").map((t) => t.trim()).filter(Boolean) })}
+                                data-testid={`button-save-tags-${reg.id}`}
+                              >
+                                {s.tagSave}
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-8" onClick={() => setEditTagsRegId(null)}>
+                                {s.tagCancel}
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -3297,6 +3649,163 @@ export default function AdminWebinarDetail() {
           {/* ===== Settings Tab ===== */}
           <TabsContent value="settings">
             <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">{s.cfTitle}</CardTitle>
+                  <CardDescription>{s.cfDesc}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {customFields.length > 0 ? (
+                    customFields.map((field, idx) => (
+                      <div key={field.id} className="p-3 border rounded-md space-y-2" data-testid={`card-custom-field-${field.id}`}>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={field.label}
+                            onChange={(e) => setCustomFields((prev) => prev.map((f, i) => i === idx ? { ...f, label: e.target.value } : f))}
+                            placeholder={s.cfLabelPlaceholder}
+                            className="flex-1"
+                            data-testid={`input-cf-label-${field.id}`}
+                          />
+                          <Select value={field.type} onValueChange={(v) => setCustomFields((prev) => prev.map((f, i) => i === idx ? { ...f, type: v as CustomField["type"] } : f))}>
+                            <SelectTrigger className="w-[130px]" data-testid={`select-cf-type-${field.id}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="text">{s.cfTypeText}</SelectItem>
+                              <SelectItem value="textarea">{s.cfTypeTextarea}</SelectItem>
+                              <SelectItem value="select">{s.cfTypeSelect}</SelectItem>
+                              <SelectItem value="checkbox">{s.cfTypeCheckbox}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button variant="ghost" size="icon" onClick={() => setCustomFields((prev) => prev.filter((_, i) => i !== idx))} data-testid={`button-delete-cf-${field.id}`}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                        {field.type === "select" && (
+                          <Input
+                            value={(field.options || []).join(", ")}
+                            onChange={(e) => setCustomFields((prev) => prev.map((f, i) => i === idx ? { ...f, options: e.target.value.split(",").map((o) => o.trim()).filter(Boolean) } : f))}
+                            placeholder={s.cfOptionsPlaceholder}
+                            data-testid={`input-cf-options-${field.id}`}
+                          />
+                        )}
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={field.required}
+                            onCheckedChange={(v) => setCustomFields((prev) => prev.map((f, i) => i === idx ? { ...f, required: v } : f))}
+                            data-testid={`switch-cf-required-${field.id}`}
+                          />
+                          <Label className="text-sm">{s.cfRequired}</Label>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-center text-muted-foreground py-4 text-sm">{s.cfNoFields}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCustomFields((prev) => [...prev, { id: `cf_${Date.now()}`, label: "", type: "text", required: false }])}
+                      data-testid="button-add-custom-field"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      {s.cfAddField}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => saveCustomFields.mutate(customFields.filter((f) => f.label.trim()))}
+                      disabled={saveCustomFields.isPending}
+                      data-testid="button-save-custom-fields"
+                    >
+                      {saveCustomFields.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                      {s.cfSave}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">{s.scTitle}</CardTitle>
+                  <CardDescription>{s.scDesc}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <Label>{s.scCountdown}</Label>
+                      <p className="text-sm text-muted-foreground">{s.scCountdownHint}</p>
+                    </div>
+                    <Switch checked={scarcityCountdown} onCheckedChange={setScarcityCountdown} data-testid="switch-scarcity-countdown" />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <Label>{s.scSeats}</Label>
+                      <p className="text-sm text-muted-foreground">{s.scSeatsHint}</p>
+                    </div>
+                    <Switch checked={scarcitySeats} onCheckedChange={setScarcitySeats} data-testid="switch-scarcity-seats" />
+                  </div>
+                  {scarcitySeats && (
+                    <div className="space-y-2">
+                      <Label>{s.scTotalSeats}</Label>
+                      <Input
+                        type="number"
+                        value={scarcityTotalSeats}
+                        onChange={(e) => setScarcityTotalSeats(e.target.value)}
+                        data-testid="input-scarcity-seats"
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label>{s.scUrgency}</Label>
+                    <Input
+                      value={scarcityUrgency}
+                      onChange={(e) => setScarcityUrgency(e.target.value)}
+                      placeholder={s.scUrgencyPlaceholder}
+                      data-testid="input-scarcity-urgency"
+                    />
+                  </div>
+                  <Button onClick={() => saveScarcity.mutate()} disabled={saveScarcity.isPending} data-testid="button-save-scarcity">
+                    {saveScarcity.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                    {s.scSave}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">{s.pgTitle}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="font-medium">{s.pgThankYouEnable}</Label>
+                      <Switch checked={thankYouEnabled} onCheckedChange={setThankYouEnabled} data-testid="switch-thankyou-enabled" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">{s.pgThankYou}</p>
+                    <Input value={thankYouHeadline} onChange={(e) => setThankYouHeadline(e.target.value)} placeholder={s.pgHeadline} data-testid="input-thankyou-headline" />
+                    <Textarea value={thankYouMessage} onChange={(e) => setThankYouMessage(e.target.value)} placeholder={s.pgMessage} rows={2} data-testid="input-thankyou-message" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input value={thankYouCtaText} onChange={(e) => setThankYouCtaText(e.target.value)} placeholder={s.pgCtaText} data-testid="input-thankyou-cta-text" />
+                      <Input value={thankYouCtaUrl} onChange={(e) => setThankYouCtaUrl(e.target.value)} placeholder={s.pgCtaUrl} data-testid="input-thankyou-cta-url" />
+                    </div>
+                  </div>
+                  <div className="space-y-3 border-t pt-4">
+                    <Label className="font-medium">{s.pgReplay}</Label>
+                    <Input value={replayHeadline} onChange={(e) => setReplayHeadline(e.target.value)} placeholder={s.pgHeadline} data-testid="input-replay-headline" />
+                    <Textarea value={replayMessage} onChange={(e) => setReplayMessage(e.target.value)} placeholder={s.pgMessage} rows={2} data-testid="input-replay-message" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input value={replayCtaText} onChange={(e) => setReplayCtaText(e.target.value)} placeholder={s.pgCtaText} data-testid="input-replay-cta-text" />
+                      <Input value={replayCtaUrl} onChange={(e) => setReplayCtaUrl(e.target.value)} placeholder={s.pgCtaUrl} data-testid="input-replay-cta-url" />
+                    </div>
+                  </div>
+                  <Button onClick={() => savePages.mutate()} disabled={savePages.isPending} data-testid="button-save-pages">
+                    {savePages.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                    {s.pgSave}
+                  </Button>
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">{s.settingsWebinarInfo}</CardTitle>
@@ -3738,6 +4247,17 @@ export default function AdminWebinarDetail() {
                       onChange={(e) => setAiTeacherName(e.target.value)}
                       placeholder={s.aiTeacherNamePlaceholder}
                       data-testid="input-ai-teacher-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{s.aiFallbackLabel}</Label>
+                    <p className="text-sm text-muted-foreground">{s.aiFallbackHint}</p>
+                    <Textarea
+                      value={aiFallback}
+                      onChange={(e) => setAiFallback(e.target.value)}
+                      placeholder={s.aiFallbackPlaceholder}
+                      rows={2}
+                      data-testid="input-ai-fallback"
                     />
                   </div>
                   <Button

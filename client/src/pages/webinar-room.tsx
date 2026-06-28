@@ -655,20 +655,36 @@ export default function WebinarRoom() {
               </div>
             )}
 
-            {videoEnded && (
-              <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-20">
-                <div className="text-center text-white">
-                  <h3 className="text-xl font-bold mb-2">直播已結束</h3>
-                  <p className="text-white/70 mb-4">感謝您的觀看</p>
-                  {feedbackSurvey && feedbackSurvey.isActive && !surveySubmitted && (
-                    <Button onClick={() => setShowSurvey(true)} variant="secondary" data-testid="button-open-survey">
-                      <Star className="w-4 h-4 mr-2" />
-                      填寫回饋問卷
-                    </Button>
-                  )}
+            {videoEnded && (() => {
+              const replay = webinar.replaySettings as { headline?: string; message?: string; ctaText?: string; ctaUrl?: string } | null;
+              return (
+                <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-20 p-4">
+                  <div className="text-center text-white max-w-md">
+                    <h3 className="text-xl font-bold mb-2" data-testid="text-replay-headline">
+                      {replay?.headline || "直播已結束"}
+                    </h3>
+                    <p className="text-white/70 mb-4" data-testid="text-replay-message">
+                      {replay?.message || "感謝您的觀看"}
+                    </p>
+                    {replay?.ctaText && replay?.ctaUrl && (
+                      <Button
+                        onClick={() => window.open(replay.ctaUrl, "_blank")}
+                        className="mb-3 w-full"
+                        data-testid="button-replay-cta"
+                      >
+                        {replay.ctaText}
+                      </Button>
+                    )}
+                    {feedbackSurvey && feedbackSurvey.isActive && !surveySubmitted && (
+                      <Button onClick={() => setShowSurvey(true)} variant="secondary" data-testid="button-open-survey">
+                        <Star className="w-4 h-4 mr-2" />
+                        填寫回饋問卷
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
 

@@ -5,7 +5,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
-import { sendWebinarRegistrationEmail } from "./gmail";
+import { sendWebinarRegistrationEmail, sendQuestionNotificationEmail } from "./gmail";
 import { createEmailRemindersForRegistration, startEmailScheduler } from "./email-scheduler";
 import crypto from "crypto";
 import {
@@ -76,6 +76,10 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // 發問通知信節流：每個直播間最短寄送間隔
+  const questionNotifyThrottle = new Map<string, number>();
+  const QUESTION_NOTIFY_COOLDOWN_MS = 60 * 1000;
+
   // Allow iframe embedding for embed routes
   app.use((req, res, next) => {
     if (req.path.startsWith('/embed/') || req.path === '/livecast-widget.js') {
@@ -485,7 +489,8 @@ export async function registerRoutes(
       webinarId,
       webinar.title,
       teacherName,
-      viewerMessage
+      viewerMessage,
+      ai.fallbackMessage
     );
     if (!answer) return;
 
@@ -907,6 +912,8 @@ export async function registerRoutes(
       if (body.selectedSession && typeof body.selectedSession === "string") {
         body.selectedSession = new Date(body.selectedSession);
       }
+      // tags 為後台專用，禁止公開報名端設定
+      delete body.tags;
       const data = insertRegistrationSchema.parse(body);
 
       const webinarCheck = await storage.getWebinar(data.webinarId);
@@ -953,6 +960,22 @@ export async function registerRoutes(
       }
       
       res.json(registration);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/webinars/:id/registrations/:regId/tags", requireWebinarOwner, async (req, res) => {
+    try {
+      const reg = await storage.getRegistration(req.params.regId as string);
+      if (!reg || reg.webinarId !== req.params.id) {
+        return res.status(404).json({ message: "找不到此報名記錄" });
+      }
+      const tags = Array.isArray(req.body.tags)
+        ? req.body.tags.map((t: any) => String(t).trim()).filter(Boolean)
+        : [];
+      const updated = await storage.updateRegistration(req.params.regId as string, { tags });
+      res.json(updated);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
@@ -1132,6 +1155,34 @@ export async function registerRoutes(
         webinarId: req.params.id
       });
       const question = await storage.createQuestion(data);
+
+      // 有人發問時通知主持人（含節流，避免被惡意灌爆）
+      if (!data.isPreset) {
+        (async () => {
+          try {
+            const webinar = await storage.getWebinar(req.params.id);
+            const notify = webinar?.notifySettings as any;
+            if (!webinar || !notify?.questionEmailEnabled) return;
+            const lastSent = questionNotifyThrottle.get(webinar.id) || 0;
+            if (Date.now() - lastSent < QUESTION_NOTIFY_COOLDOWN_MS) return;
+            questionNotifyThrottle.set(webinar.id, Date.now());
+            let to = (notify.notifyEmail || "").trim();
+            if (!to && webinar.userId) {
+              const owner = await storage.getUser(webinar.userId);
+              to = owner?.email || "";
+            }
+            if (!to) return;
+            const baseUrl = `${req.protocol}://${req.get("host")}`;
+            const controlUrl = `${baseUrl}/admin/webinar/${webinar.id}/control`;
+            await sendQuestionNotificationEmail(
+              to, webinar.title, data.askerName, data.question, controlUrl
+            );
+          } catch (err) {
+            console.error("Failed to send question notification:", err);
+          }
+        })();
+      }
+
       res.json(question);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -1370,6 +1421,15 @@ export async function registerRoutes(
   });
 
   // ============ Public: Available Sessions ============
+  app.get("/api/webinars/:id/registration-count", async (req, res) => {
+    try {
+      const regs = await storage.getRegistrationsByWebinar(req.params.id as string);
+      res.json({ count: regs.length });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   app.get("/api/webinars/:id/available-sessions", async (req, res) => {
     try {
       const webinar = await storage.getWebinar(req.params.id as string);
@@ -1634,12 +1694,16 @@ export async function registerRoutes(
   app.get("/api/webinars/:id/registrations/export", requireWebinarOwner, async (req, res) => {
     try {
       const regs = await storage.getRegistrationsByWebinar(req.params.id as string);
-      const headers = ["Name", "Email", "Registered At", "Attended", "Attended At", "Left At", "Watch Duration (s)", "UTM Source", "UTM Medium", "UTM Campaign", "UTM Term", "UTM Content", "Landing URL"];
+      const webinar = await storage.getWebinar(req.params.id as string);
+      const customFields = (webinar?.customFields as Array<{ id: string; label: string }>) || [];
+      const headers = ["Name", "Email", "Phone", "Tags", "Registered At", "Attended", "Attended At", "Left At", "Watch Duration (s)", "UTM Source", "UTM Medium", "UTM Campaign", "UTM Term", "UTM Content", "Landing URL", ...customFields.map(f => f.label)];
       const rows = regs.map((r: any) => [
-        r.name, r.email, r.registeredAt || "", r.attended ? "Yes" : "No",
+        r.name, r.email, r.phone || "", (r.tags || []).join("; "),
+        r.registeredAt || "", r.attended ? "Yes" : "No",
         r.attendedAt || "", r.leftAt || "", r.watchDuration || "",
         r.utmSource || "", r.utmMedium || "", r.utmCampaign || "",
-        r.utmTerm || "", r.utmContent || "", r.landingUrl || ""
+        r.utmTerm || "", r.utmContent || "", r.landingUrl || "",
+        ...customFields.map(f => (r.customFieldData || {})[f.id] || "")
       ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
       const csv = [headers.join(","), ...rows].join("\n");
       res.setHeader("Content-Type", "text/csv; charset=utf-8");

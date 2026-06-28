@@ -6,13 +6,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Calendar, Clock, CheckCircle, Loader2, Play, Zap } from "lucide-react";
+import { Calendar, Clock, CheckCircle, Loader2, Play, Zap, Users } from "lucide-react";
 import type { Webinar } from "@shared/schema";
+
+type CustomField = { id: string; label: string; type: "text" | "textarea" | "select" | "checkbox"; required: boolean; options?: string[] };
 
 interface AvailableSessionsResponse {
   mode: "fixed" | "recurring" | "onDemand" | "justInTime";
@@ -36,6 +41,9 @@ export default function Registration() {
   const { toast } = useToast();
   const [registered, setRegistered] = useState(false);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, boolean>>({});
+  const [now, setNow] = useState(Date.now());
 
   const { data: webinar, isLoading } = useQuery<Webinar>({
     queryKey: ["/api/webinars", id],
@@ -44,6 +52,11 @@ export default function Registration() {
 
   const { data: availableSessions } = useQuery<AvailableSessionsResponse>({
     queryKey: ["/api/webinars", id, "available-sessions"],
+    enabled: !!id,
+  });
+
+  const { data: regCount } = useQuery<{ count: number }>({
+    queryKey: ["/api/webinars", id, "registration-count"],
     enabled: !!id,
   });
 
@@ -71,6 +84,9 @@ export default function Registration() {
       };
       if (selectedSession) {
         payload.selectedSession = selectedSession;
+      }
+      if (Object.keys(customFieldValues).length > 0) {
+        payload.customFieldData = customFieldValues;
       }
       return apiRequest("POST", "/api/registrations", payload);
     },
@@ -123,6 +139,11 @@ export default function Registration() {
     }
   }, [availableSessions, selectedSession]);
 
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center">
@@ -165,6 +186,39 @@ export default function Registration() {
   const showSessionPicker = hasSessions && availableSessions && availableSessions.sessions.length >= 1 && mode !== "onDemand";
   const showSelectedTime = selectedSession || mode === "onDemand" || (mode === "fixed" && !showSessionPicker);
 
+  const customFields = (webinar.customFields as CustomField[]) || [];
+  const scarcity = webinar.scarcitySettings as { countdownEnabled: boolean; seatsEnabled: boolean; totalSeats: number; urgencyText: string } | null;
+  const thankYou = webinar.thankYouSettings as { enabled: boolean; headline: string; message: string; ctaText: string; ctaUrl: string } | null;
+
+  const countdownTarget = selectedSession
+    ? new Date(selectedSession).getTime()
+    : (hasSessions && availableSessions?.sessions?.[0]?.scheduledStart
+        ? new Date(availableSessions.sessions[0].scheduledStart).getTime()
+        : (webinar.startTime ? new Date(webinar.startTime).getTime() : 0));
+  const countdownMs = countdownTarget - now;
+  const showCountdown = scarcity?.countdownEnabled && mode !== "onDemand" && countdownMs > 0;
+  const cdDays = Math.floor(countdownMs / 86400000);
+  const cdHours = Math.floor((countdownMs % 86400000) / 3600000);
+  const cdMins = Math.floor((countdownMs % 3600000) / 60000);
+  const cdSecs = Math.floor((countdownMs % 60000) / 1000);
+
+  const validateAndSubmit = (data: RegistrationForm) => {
+    const errors: Record<string, boolean> = {};
+    customFields.forEach((f) => {
+      if (f.required) {
+        const v = customFieldValues[f.id];
+        if (f.type === "checkbox") {
+          if (v !== "true") errors[f.id] = true;
+        } else if (!v || !v.trim()) {
+          errors[f.id] = true;
+        }
+      }
+    });
+    setCustomFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    registerMutation.mutate(data);
+  };
+
   if (registered) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4" style={brandGradient}>
@@ -178,9 +232,11 @@ export default function Registration() {
             <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="h-8 w-8 text-green-600" />
             </div>
-            <h2 className="text-2xl font-bold mb-2" data-testid="text-registration-success">報名成功！</h2>
+            <h2 className="text-2xl font-bold mb-2" data-testid="text-registration-success">
+              {thankYou?.enabled && thankYou.headline ? thankYou.headline : "報名成功！"}
+            </h2>
             <p className="text-muted-foreground mb-6">
-              我們已將直播連結發送至您的 Email，請在直播時間準時加入。
+              {thankYou?.enabled && thankYou.message ? thankYou.message : "我們已將直播連結發送至您的 Email，請在直播時間準時加入。"}
             </p>
             <div className="bg-muted rounded-md p-4 mb-6 text-left">
               <h3 className="font-semibold mb-3 text-center">{webinar.title}</h3>
@@ -201,9 +257,19 @@ export default function Registration() {
                 </div>
               )}
             </div>
+            {thankYou?.enabled && thankYou.ctaText && thankYou.ctaUrl && (
+              <Button
+                onClick={() => window.open(thankYou.ctaUrl, "_blank")}
+                className="w-full mb-3"
+                data-testid="button-thankyou-cta"
+              >
+                {thankYou.ctaText}
+              </Button>
+            )}
             <Button
               onClick={() => setLocation(`/webinar/${id}`)}
               className="w-full"
+              variant={thankYou?.enabled && thankYou.ctaText && thankYou.ctaUrl ? "outline" : "default"}
               data-testid="button-enter-webinar"
             >
               {mode === "onDemand" ? "立即觀看" : "進入直播間"}
@@ -238,6 +304,46 @@ export default function Registration() {
           )}
         </CardHeader>
         <CardContent>
+          {showCountdown && (
+            <div className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-md" data-testid="card-countdown">
+              <div className="flex items-center justify-center gap-2 text-sm font-medium text-primary mb-3">
+                <Clock className="h-4 w-4" />
+                <span>距離開始還有</span>
+              </div>
+              <div className="flex items-center justify-center gap-3 text-center">
+                {[
+                  { v: cdDays, l: "天" },
+                  { v: cdHours, l: "時" },
+                  { v: cdMins, l: "分" },
+                  { v: cdSecs, l: "秒" },
+                ].map((u, i) => (
+                  <div key={i} className="flex flex-col items-center">
+                    <span className="text-2xl font-bold tabular-nums" data-testid={`text-countdown-${u.l}`}>
+                      {String(u.v).padStart(2, "0")}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{u.l}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {scarcity?.seatsEnabled && (
+            <div className="flex items-center justify-center gap-2 mb-6 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md" data-testid="card-scarcity-seats">
+              <Users className="h-5 w-5 text-amber-600" />
+              <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                {scarcity.urgencyText || `名額有限，僅剩 ${Math.max(scarcity.totalSeats - (regCount?.count || 0), 1)} 個名額`}
+              </span>
+            </div>
+          )}
+
+          {!scarcity?.seatsEnabled && scarcity?.urgencyText && (
+            <div className="flex items-center justify-center gap-2 mb-6 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md" data-testid="card-scarcity-urgency">
+              <Zap className="h-5 w-5 text-amber-600" />
+              <span className="text-sm font-medium text-amber-800 dark:text-amber-300">{scarcity.urgencyText}</span>
+            </div>
+          )}
+
           {mode === "onDemand" && (
             <div className="flex items-center justify-center gap-2 mb-6 p-3 bg-muted rounded-md">
               <Play className="h-5 w-5 text-green-600" />
@@ -293,7 +399,7 @@ export default function Registration() {
 
           <Form {...form}>
             <form
-              onSubmit={form.handleSubmit((data) => registerMutation.mutate(data))}
+              onSubmit={form.handleSubmit(validateAndSubmit)}
               className="space-y-4"
             >
               <FormField
@@ -351,6 +457,65 @@ export default function Registration() {
                   </FormItem>
                 )}
               />
+
+              {customFields.map((cf) => (
+                <div key={cf.id} className="space-y-2" data-testid={`field-custom-${cf.id}`}>
+                  {cf.type !== "checkbox" && (
+                    <Label className="text-sm font-medium">
+                      {cf.label}
+                      {cf.required && <span className="text-destructive ml-1">*</span>}
+                    </Label>
+                  )}
+                  {cf.type === "text" && (
+                    <Input
+                      value={customFieldValues[cf.id] || ""}
+                      onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))}
+                      placeholder={cf.label}
+                      data-testid={`input-custom-${cf.id}`}
+                    />
+                  )}
+                  {cf.type === "textarea" && (
+                    <Textarea
+                      value={customFieldValues[cf.id] || ""}
+                      onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))}
+                      placeholder={cf.label}
+                      rows={3}
+                      data-testid={`input-custom-${cf.id}`}
+                    />
+                  )}
+                  {cf.type === "select" && (
+                    <Select
+                      value={customFieldValues[cf.id] || ""}
+                      onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [cf.id]: v }))}
+                    >
+                      <SelectTrigger data-testid={`select-custom-${cf.id}`}>
+                        <SelectValue placeholder={cf.label} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(cf.options || []).map((opt, i) => (
+                          <SelectItem key={i} value={opt}>{opt}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {cf.type === "checkbox" && (
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={customFieldValues[cf.id] === "true"}
+                        onCheckedChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [cf.id]: v ? "true" : "false" }))}
+                        data-testid={`checkbox-custom-${cf.id}`}
+                      />
+                      <Label className="text-sm font-medium">
+                        {cf.label}
+                        {cf.required && <span className="text-destructive ml-1">*</span>}
+                      </Label>
+                    </div>
+                  )}
+                  {customFieldErrors[cf.id] && (
+                    <p className="text-xs text-destructive" data-testid={`error-custom-${cf.id}`}>此欄位為必填</p>
+                  )}
+                </div>
+              ))}
 
               <Button
                 type="submit"
