@@ -394,17 +394,29 @@ export default function WebinarRoom() {
   };
 
   const sendMessage = () => {
-    if (!messageInput.trim() || !wsRef.current) return;
+    const text = messageInput.trim();
+    if (!text || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify({
       type: "chat",
       data: {
         webinarId: id,
         sessionId,
         senderName: nickname,
-        message: messageInput.trim(),
+        message: text,
         senderType: "viewer"
       }
     }));
+    const optimistic = {
+      id: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      webinarId: id || "",
+      sessionId,
+      senderName: nickname,
+      senderType: "viewer",
+      message: text,
+      sentAt: new Date(),
+      isPrivate: false,
+    } as ChatMessage;
+    setMessages((prev) => [...prev, optimistic]);
     setMessageInput("");
   };
 
@@ -838,6 +850,7 @@ export default function WebinarRoom() {
           <div className="border-t bg-card p-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2 px-1">
               <span className="truncate">{nickname}</span>
+              <span className="ml-auto flex-shrink-0 opacity-70">Shift + Enter 送出</span>
             </div>
             <div className="flex gap-2 items-center">
               <Input
@@ -846,7 +859,7 @@ export default function WebinarRoom() {
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (e.key === "Enter" && e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
                     sendMessage();
                   }
