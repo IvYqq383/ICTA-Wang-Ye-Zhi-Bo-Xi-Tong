@@ -34,6 +34,41 @@ const registrationSchema = z.object({
 
 type RegistrationForm = z.infer<typeof registrationSchema>;
 
+function Countdown({ target }: { target: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const ms = target - now;
+  if (ms <= 0) return null;
+  const days = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  const secs = Math.floor((ms % 60000) / 1000);
+  return (
+    <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-md" data-testid="card-embed-countdown">
+      <div className="flex items-center justify-center gap-1.5 text-xs font-medium text-primary mb-2">
+        <Clock className="h-3.5 w-3.5" />
+        <span>距離開始還有</span>
+      </div>
+      <div className="flex items-center justify-center gap-2 text-center">
+        {[
+          { v: days, l: "天" },
+          { v: hours, l: "時" },
+          { v: mins, l: "分" },
+          { v: secs, l: "秒" },
+        ].map((u, i) => (
+          <div key={i} className="flex flex-col items-center">
+            <span className="text-lg font-bold tabular-nums">{String(u.v).padStart(2, "0")}</span>
+            <span className="text-[10px] text-muted-foreground">{u.l}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function EmbedRegister() {
   const { id } = useParams<{ id: string }>();
   const [registered, setRegistered] = useState(false);
@@ -42,7 +77,6 @@ export default function EmbedRegister() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, boolean>>({});
-  const [now, setNow] = useState(Date.now());
 
   const { data: webinar, isLoading } = useQuery<Webinar>({
     queryKey: ["/api/webinars", id],
@@ -118,11 +152,6 @@ export default function EmbedRegister() {
     };
   }, []);
 
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   const formatDate = (date: string | Date) => {
     return new Date(date).toLocaleString("zh-TW", {
       year: "numeric", month: "long", day: "numeric",
@@ -159,12 +188,7 @@ export default function EmbedRegister() {
     : (hasSessions && availableSessions?.sessions?.[0]?.scheduledStart
         ? new Date(availableSessions.sessions[0].scheduledStart).getTime()
         : (webinar?.startTime ? new Date(webinar.startTime).getTime() : 0));
-  const countdownMs = countdownTarget - now;
-  const showCountdown = scarcity?.countdownEnabled && mode !== "onDemand" && countdownMs > 0;
-  const cdDays = Math.floor(countdownMs / 86400000);
-  const cdHours = Math.floor((countdownMs % 86400000) / 3600000);
-  const cdMins = Math.floor((countdownMs % 3600000) / 60000);
-  const cdSecs = Math.floor((countdownMs % 60000) / 1000);
+  const showCountdown = scarcity?.countdownEnabled && mode !== "onDemand" && countdownTarget > Date.now();
 
   const validateAndSubmit = (data: RegistrationForm) => {
     setErrorMessage(null);
@@ -283,27 +307,7 @@ export default function EmbedRegister() {
         <p className="text-xs text-muted-foreground text-center mb-3">{webinar.description}</p>
       )}
 
-      {showCountdown && (
-        <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-md" data-testid="card-embed-countdown">
-          <div className="flex items-center justify-center gap-1.5 text-xs font-medium text-primary mb-2">
-            <Clock className="h-3.5 w-3.5" />
-            <span>距離開始還有</span>
-          </div>
-          <div className="flex items-center justify-center gap-2 text-center">
-            {[
-              { v: cdDays, l: "天" },
-              { v: cdHours, l: "時" },
-              { v: cdMins, l: "分" },
-              { v: cdSecs, l: "秒" },
-            ].map((u, i) => (
-              <div key={i} className="flex flex-col items-center">
-                <span className="text-lg font-bold tabular-nums">{String(u.v).padStart(2, "0")}</span>
-                <span className="text-[10px] text-muted-foreground">{u.l}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {showCountdown && <Countdown target={countdownTarget} />}
 
       {scarcity?.seatsEnabled && (
         <div className="flex items-center justify-center gap-1.5 mb-4 p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md" data-testid="card-embed-scarcity-seats">

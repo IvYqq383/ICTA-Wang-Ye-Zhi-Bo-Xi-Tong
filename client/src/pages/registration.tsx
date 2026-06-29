@@ -35,6 +35,43 @@ const registrationSchema = z.object({
 
 type RegistrationForm = z.infer<typeof registrationSchema>;
 
+function Countdown({ target }: { target: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const ms = target - now;
+  if (ms <= 0) return null;
+  const days = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  const secs = Math.floor((ms % 60000) / 1000);
+  return (
+    <div className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-md" data-testid="card-countdown">
+      <div className="flex items-center justify-center gap-2 text-sm font-medium text-primary mb-3">
+        <Clock className="h-4 w-4" />
+        <span>距離開始還有</span>
+      </div>
+      <div className="flex items-center justify-center gap-3 text-center">
+        {[
+          { v: days, l: "天" },
+          { v: hours, l: "時" },
+          { v: mins, l: "分" },
+          { v: secs, l: "秒" },
+        ].map((u, i) => (
+          <div key={i} className="flex flex-col items-center">
+            <span className="text-2xl font-bold tabular-nums" data-testid={`text-countdown-${u.l}`}>
+              {String(u.v).padStart(2, "0")}
+            </span>
+            <span className="text-xs text-muted-foreground">{u.l}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Registration() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -43,7 +80,6 @@ export default function Registration() {
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, boolean>>({});
-  const [now, setNow] = useState(Date.now());
 
   const { data: webinar, isLoading } = useQuery<Webinar>({
     queryKey: ["/api/webinars", id],
@@ -139,11 +175,6 @@ export default function Registration() {
     }
   }, [availableSessions, selectedSession]);
 
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center">
@@ -195,12 +226,7 @@ export default function Registration() {
     : (hasSessions && availableSessions?.sessions?.[0]?.scheduledStart
         ? new Date(availableSessions.sessions[0].scheduledStart).getTime()
         : (webinar.startTime ? new Date(webinar.startTime).getTime() : 0));
-  const countdownMs = countdownTarget - now;
-  const showCountdown = scarcity?.countdownEnabled && mode !== "onDemand" && countdownMs > 0;
-  const cdDays = Math.floor(countdownMs / 86400000);
-  const cdHours = Math.floor((countdownMs % 86400000) / 3600000);
-  const cdMins = Math.floor((countdownMs % 3600000) / 60000);
-  const cdSecs = Math.floor((countdownMs % 60000) / 1000);
+  const showCountdown = scarcity?.countdownEnabled && mode !== "onDemand" && countdownTarget > Date.now();
 
   const validateAndSubmit = (data: RegistrationForm) => {
     const errors: Record<string, boolean> = {};
@@ -304,29 +330,7 @@ export default function Registration() {
           )}
         </CardHeader>
         <CardContent>
-          {showCountdown && (
-            <div className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-md" data-testid="card-countdown">
-              <div className="flex items-center justify-center gap-2 text-sm font-medium text-primary mb-3">
-                <Clock className="h-4 w-4" />
-                <span>距離開始還有</span>
-              </div>
-              <div className="flex items-center justify-center gap-3 text-center">
-                {[
-                  { v: cdDays, l: "天" },
-                  { v: cdHours, l: "時" },
-                  { v: cdMins, l: "分" },
-                  { v: cdSecs, l: "秒" },
-                ].map((u, i) => (
-                  <div key={i} className="flex flex-col items-center">
-                    <span className="text-2xl font-bold tabular-nums" data-testid={`text-countdown-${u.l}`}>
-                      {String(u.v).padStart(2, "0")}
-                    </span>
-                    <span className="text-xs text-muted-foreground">{u.l}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {showCountdown && <Countdown target={countdownTarget} />}
 
           {scarcity?.seatsEnabled && (
             <div className="flex items-center justify-center gap-2 mb-6 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md" data-testid="card-scarcity-seats">
