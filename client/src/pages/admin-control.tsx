@@ -28,6 +28,9 @@ const t: Record<LangAdmin, Record<string, string>> = {
     viewerList: "觀眾列表",
     allMessages: "所有訊息",
     noViewers: "尚無觀眾加入",
+    onlineGroup: "在線上",
+    offlineGroup: "不在線上",
+    offlineHint: "已離線，無法即時回覆",
     messageCount: "則訊息",
     viewerFallback: "觀眾",
     conversation: "的對話",
@@ -89,6 +92,9 @@ const t: Record<LangAdmin, Record<string, string>> = {
     viewerList: "观众列表",
     allMessages: "所有消息",
     noViewers: "尚无观众加入",
+    onlineGroup: "在线上",
+    offlineGroup: "不在线上",
+    offlineHint: "已离线，无法实时回复",
     messageCount: "则消息",
     viewerFallback: "观众",
     conversation: "的对话",
@@ -164,6 +170,7 @@ export default function AdminControl() {
   
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
   const [viewerSessions, setViewerSessions] = useState<Map<string, ViewerSession>>(new Map());
+  const [onlineSessions, setOnlineSessions] = useState<Map<string, string>>(new Map());
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
 
   const [ctaTextInput, setCtaTextInput] = useState("");
@@ -256,6 +263,13 @@ export default function AdminControl() {
         case "viewerCount":
           setViewerCount(msg.data.count);
           break;
+        case "viewerList": {
+          const online = (msg.data.online || []) as { sessionId: string; nickname: string }[];
+          const map = new Map<string, string>();
+          online.forEach((v) => map.set(v.sessionId, v.nickname));
+          setOnlineSessions(map);
+          break;
+        }
         case "history": {
           const messages = msg.data.messages || [];
           setAllMessages(messages);
@@ -356,6 +370,13 @@ export default function AdminControl() {
         existing.messages = [...existing.messages, localMsg];
         existing.lastActivity = new Date();
         updated.set(selectedSession, existing);
+      } else {
+        updated.set(selectedSession, {
+          sessionId: selectedSession,
+          nickname: getSessionNickname(selectedSession),
+          messages: [localMsg],
+          lastActivity: new Date(),
+        });
       }
       return updated;
     });
@@ -442,6 +463,9 @@ export default function AdminControl() {
     return session?.messages || [];
   };
 
+  const getSessionNickname = (sid: string) =>
+    viewerSessions.get(sid)?.nickname || onlineSessions.get(sid) || s.viewerFallback;
+
   const formatTime = (date: Date | string | null) => {
     if (!date) return "";
     const d = new Date(date);
@@ -464,9 +488,25 @@ export default function AdminControl() {
     );
   }
 
-  const sessionsList = Array.from(viewerSessions.values()).sort(
-    (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
+  const allSessionIds = Array.from(
+    new Set<string>([...Array.from(viewerSessions.keys()), ...Array.from(onlineSessions.keys())])
   );
+  const viewerRows = allSessionIds.map((sid) => {
+    const chat = viewerSessions.get(sid);
+    return {
+      sessionId: sid,
+      nickname: chat?.nickname || onlineSessions.get(sid) || s.viewerFallback,
+      messageCount: chat?.messages.length || 0,
+      lastActivity: chat?.lastActivity ?? null as Date | null,
+      online: onlineSessions.has(sid),
+    };
+  });
+  const sortByActivity = (a: typeof viewerRows[number], b: typeof viewerRows[number]) =>
+    (b.lastActivity ? new Date(b.lastActivity).getTime() : 0) -
+    (a.lastActivity ? new Date(a.lastActivity).getTime() : 0);
+  const onlineRows = viewerRows.filter((r) => r.online).sort(sortByActivity);
+  const offlineRows = viewerRows.filter((r) => !r.online).sort(sortByActivity);
+  const totalViewers = viewerRows.length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -512,7 +552,7 @@ export default function AdminControl() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Users className="h-4 w-4" />
-                {s.viewerList} ({sessionsList.length})
+                {s.viewerList} ({totalViewers})
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -528,35 +568,78 @@ export default function AdminControl() {
                     {s.allMessages} ({allMessages.length})
                   </Button>
                   
-                  {sessionsList.length === 0 ? (
+                  {totalViewers === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
                       {s.noViewers}
                     </p>
                   ) : (
-                    sessionsList.map((session) => (
-                      <Button
-                        key={session.sessionId}
-                        variant={selectedSession === session.sessionId ? "default" : "ghost"}
-                        className="w-full justify-start"
-                        onClick={() => setSelectedSession(session.sessionId)}
-                        data-testid={`button-session-${session.sessionId}`}
-                      >
-                        <div className="flex items-center gap-2 w-full">
-                          <User className="h-4 w-4 flex-shrink-0" />
-                          <div className="flex-1 text-left min-w-0">
-                            <div className="font-medium truncate">{session.nickname}</div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-1">
-                              <MessageCircle className="h-3 w-3" />
-                              {session.messages.length} {s.messageCount}
-                            </div>
-                          </div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {formatTime(session.lastActivity)}
-                          </div>
+                    <>
+                      {onlineRows.length > 0 && (
+                        <div className="flex items-center gap-1.5 px-1 pt-2 text-xs font-medium text-green-600 dark:text-green-500">
+                          <span className="h-2 w-2 rounded-full bg-green-500" />
+                          {s.onlineGroup} ({onlineRows.length})
                         </div>
-                      </Button>
-                    ))
+                      )}
+                      {onlineRows.map((row) => (
+                        <Button
+                          key={row.sessionId}
+                          variant={selectedSession === row.sessionId ? "default" : "ghost"}
+                          className="w-full justify-start"
+                          onClick={() => setSelectedSession(row.sessionId)}
+                          data-testid={`button-session-${row.sessionId}`}
+                        >
+                          <div className="flex items-center gap-2 w-full">
+                            <span className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0" />
+                            <div className="flex-1 text-left min-w-0">
+                              <div className="font-medium truncate">{row.nickname}</div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                <MessageCircle className="h-3 w-3" />
+                                {row.messageCount} {s.messageCount}
+                              </div>
+                            </div>
+                            {row.lastActivity && (
+                              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatTime(row.lastActivity)}
+                              </div>
+                            )}
+                          </div>
+                        </Button>
+                      ))}
+
+                      {offlineRows.length > 0 && (
+                        <div className="flex items-center gap-1.5 px-1 pt-3 text-xs font-medium text-muted-foreground">
+                          <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
+                          {s.offlineGroup} ({offlineRows.length})
+                        </div>
+                      )}
+                      {offlineRows.map((row) => (
+                        <Button
+                          key={row.sessionId}
+                          variant={selectedSession === row.sessionId ? "default" : "ghost"}
+                          className="w-full justify-start opacity-70"
+                          onClick={() => setSelectedSession(row.sessionId)}
+                          data-testid={`button-session-${row.sessionId}`}
+                        >
+                          <div className="flex items-center gap-2 w-full">
+                            <User className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                            <div className="flex-1 text-left min-w-0">
+                              <div className="font-medium truncate">{row.nickname}</div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                <MessageCircle className="h-3 w-3" />
+                                {row.messageCount} {s.messageCount}
+                              </div>
+                            </div>
+                            {row.lastActivity && (
+                              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatTime(row.lastActivity)}
+                              </div>
+                            )}
+                          </div>
+                        </Button>
+                      ))}
+                    </>
                   )}
                 </div>
               </ScrollArea>
@@ -568,7 +651,7 @@ export default function AdminControl() {
               <CardTitle className="text-base flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
                 {selectedSession 
-                  ? `${viewerSessions.get(selectedSession)?.nickname || s.viewerFallback} ${s.conversation}`
+                  ? `${getSessionNickname(selectedSession)} ${s.conversation}`
                   : s.allChat
                 }
               </CardTitle>
@@ -635,6 +718,7 @@ export default function AdminControl() {
                     placeholder={selectedSession ? s.replyPlaceholder : s.broadcastPlaceholder}
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
+                    disabled={!!selectedSession && !onlineSessions.has(selectedSession)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         selectedSession ? sendReplyToSession() : sendBroadcastMessage();
@@ -646,6 +730,7 @@ export default function AdminControl() {
                     onClick={selectedSession ? sendReplyToSession : sendBroadcastMessage} 
                     size="icon"
                     variant={selectedSession ? "default" : "secondary"}
+                    disabled={!!selectedSession && !onlineSessions.has(selectedSession)}
                     data-testid="button-send-host-message"
                   >
                     <Send className="h-4 w-4" />
@@ -653,9 +738,15 @@ export default function AdminControl() {
                 </div>
                 
                 {selectedSession && (
-                  <p className="text-xs text-muted-foreground">
-                    {s.replyHintPrefix}{viewerSessions.get(selectedSession)?.nickname}{s.replyHintSuffix}
-                  </p>
+                  onlineSessions.has(selectedSession) ? (
+                    <p className="text-xs text-muted-foreground">
+                      {s.replyHintPrefix}{getSessionNickname(selectedSession)}{s.replyHintSuffix}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-amber-600 dark:text-amber-500">
+                      {s.offlineHint}
+                    </p>
+                  )
                 )}
               </div>
             </CardContent>
@@ -830,7 +921,7 @@ export default function AdminControl() {
                       <div className="text-xs text-muted-foreground">{s.onlineCount}</div>
                     </Card>
                     <Card className="p-3 text-center">
-                      <div className="text-xl font-bold">{sessionsList.length}</div>
+                      <div className="text-xl font-bold">{viewerSessions.size}</div>
                       <div className="text-xs text-muted-foreground">{s.interactiveViewers}</div>
                     </Card>
                     <Card className="p-3 text-center">

@@ -49,6 +49,7 @@ declare module "express-session" {
 const sessionConnections = new Map<string, WebSocket>();
 const webinarSessions = new Map<string, Set<string>>();
 const hostConnections = new Map<string, Set<WebSocket>>();
+const sessionNicknames = new Map<string, string>();
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (req.session?.userId) {
@@ -217,6 +218,7 @@ export async function registerRoutes(
               webinarSessions.set(webinarId, new Set());
             }
             webinarSessions.get(webinarId)!.add(sessionId);
+            sessionNicknames.set(sessionId, (nickname && String(nickname).trim()) || "觀眾");
             
             // Send ONLY this session's messages (not other viewers')
             // For new sessions, this will be empty - they only see scheduled messages
@@ -237,11 +239,12 @@ export async function registerRoutes(
               data: { sessionId }
             }));
             
-            // Update viewer count for hosts only
+            // Update viewer count + presence list for hosts only
             broadcastToHosts(webinarId, {
               type: "viewerCount",
               data: { count: webinarSessions.get(webinarId)?.size || 0 }
             });
+            broadcastPresence(webinarId);
             break;
           }
           
@@ -283,6 +286,10 @@ export async function registerRoutes(
             ws.send(JSON.stringify({
               type: "viewerCount",
               data: { count: viewerCount }
+            }));
+            ws.send(JSON.stringify({
+              type: "viewerList",
+              data: { online: buildPresence(webinarId) }
             }));
             break;
           }
@@ -559,11 +566,13 @@ export async function registerRoutes(
         } else if (currentSessionId) {
           sessionConnections.delete(currentSessionId);
           webinarSessions.get(currentWebinarId)?.delete(currentSessionId);
+          sessionNicknames.delete(currentSessionId);
           
           broadcastToHosts(currentWebinarId, {
             type: "viewerCount",
             data: { count: webinarSessions.get(currentWebinarId)?.size || 0 }
           });
+          broadcastPresence(currentWebinarId);
         }
       }
     });
@@ -580,6 +589,24 @@ export async function registerRoutes(
         }
       });
     }
+  }
+
+  function buildPresence(webinarId: string) {
+    const sessions = webinarSessions.get(webinarId);
+    const online: { sessionId: string; nickname: string }[] = [];
+    if (sessions) {
+      sessions.forEach((sid) => {
+        online.push({ sessionId: sid, nickname: sessionNicknames.get(sid) || "觀眾" });
+      });
+    }
+    return online;
+  }
+
+  function broadcastPresence(webinarId: string) {
+    broadcastToHosts(webinarId, {
+      type: "viewerList",
+      data: { online: buildPresence(webinarId) }
+    });
   }
 
   function broadcastToHosts(webinarId: string, message: any, excludeWs?: WebSocket) {
