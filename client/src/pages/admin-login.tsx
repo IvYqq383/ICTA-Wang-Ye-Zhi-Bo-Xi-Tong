@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -151,12 +151,12 @@ export default function AdminLogin() {
 
   const s = t[lang];
 
-  const loginSchema = z.object({
+  const loginSchema = useMemo(() => z.object({
     username: z.string().min(1, s.usernameReq),
     password: z.string().min(1, s.passwordReq),
-  });
+  }), [lang]);
 
-  const registerSchema = z.object({
+  const registerSchema = useMemo(() => z.object({
     username: z.string().min(3, s.usernameMin),
     email: z.string().email(s.emailInvalid),
     password: z.string().min(6, s.passwordMinLen),
@@ -165,10 +165,10 @@ export default function AdminLogin() {
   }).refine((data) => data.password === data.confirmPassword, {
     message: s.passwordMismatch,
     path: ["confirmPassword"],
-  });
+  }), [lang]);
 
-  type LoginForm = z.infer<typeof loginSchema>;
-  type RegisterForm = z.infer<typeof registerSchema>;
+  type LoginForm = { username: string; password: string };
+  type RegisterForm = { username: string; email: string; password: string; confirmPassword: string; companyName?: string };
 
   const loginForm = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -283,7 +283,7 @@ export default function AdminLogin() {
                     <FormItem>
                       <FormLabel>{s.username}</FormLabel>
                       <FormControl>
-                        <Input placeholder={s.usernamePh} {...field} data-testid="input-username" />
+                        <Input placeholder={s.usernamePh} autoComplete="username" {...field} data-testid="input-username" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -296,7 +296,7 @@ export default function AdminLogin() {
                     <FormItem>
                       <FormLabel>{s.password}</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder={s.passwordPh} {...field} data-testid="input-password" />
+                        <Input type="password" placeholder={s.passwordPh} autoComplete="current-password" {...field} data-testid="input-password" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -318,7 +318,7 @@ export default function AdminLogin() {
                     <FormItem>
                       <FormLabel>{s.username}</FormLabel>
                       <FormControl>
-                        <Input placeholder={s.chooseUsername} {...field} data-testid="input-reg-username" />
+                        <Input placeholder={s.chooseUsername} autoComplete="username" {...field} data-testid="input-reg-username" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -331,7 +331,7 @@ export default function AdminLogin() {
                     <FormItem>
                       <FormLabel>{s.email}</FormLabel>
                       <FormControl>
-                        <Input type="email" placeholder={s.emailPh} {...field} data-testid="input-reg-email" />
+                        <Input type="email" placeholder={s.emailPh} autoComplete="email" {...field} data-testid="input-reg-email" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -344,7 +344,7 @@ export default function AdminLogin() {
                     <FormItem>
                       <FormLabel>{s.company} <span className="text-muted-foreground text-xs">{s.companyOpt}</span></FormLabel>
                       <FormControl>
-                        <Input placeholder={s.companyPh} {...field} data-testid="input-reg-company" />
+                        <Input placeholder={s.companyPh} autoComplete="organization" {...field} data-testid="input-reg-company" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -357,7 +357,7 @@ export default function AdminLogin() {
                     <FormItem>
                       <FormLabel>{s.password}</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder={s.passwordMin} {...field} data-testid="input-reg-password" />
+                        <Input type="password" placeholder={s.passwordMin} autoComplete="new-password" {...field} data-testid="input-reg-password" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -370,7 +370,7 @@ export default function AdminLogin() {
                     <FormItem>
                       <FormLabel>{s.confirmPw}</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder={s.confirmPwPh} {...field} data-testid="input-reg-confirm" />
+                        <Input type="password" placeholder={s.confirmPwPh} autoComplete="new-password" {...field} data-testid="input-reg-confirm" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
