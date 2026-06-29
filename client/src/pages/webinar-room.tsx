@@ -435,6 +435,13 @@ export default function WebinarRoom() {
     setHasVoted(true);
   };
 
+  const dismissPoll = () => {
+    setActivePoll(null);
+    setHasVoted(false);
+    setPollResults({});
+    setSelectedOption(null);
+  };
+
   const handleSurveySubmit = () => {
     if (!feedbackSurvey) return;
     submitSurveyMutation.mutate({
@@ -892,7 +899,7 @@ export default function WebinarRoom() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={hasVoted && Object.keys(pollResults).length > 0} onOpenChange={() => setHasVoted(false)}>
+      <Dialog open={hasVoted && Object.keys(pollResults).length > 0} onOpenChange={(o) => { if (!o) dismissPoll(); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>投票結果</DialogTitle>
@@ -919,7 +926,7 @@ export default function WebinarRoom() {
               );
             })}
           </div>
-          <Button onClick={() => setHasVoted(false)} variant="outline" className="w-full">
+          <Button onClick={dismissPoll} variant="outline" className="w-full">
             關閉
           </Button>
         </DialogContent>
