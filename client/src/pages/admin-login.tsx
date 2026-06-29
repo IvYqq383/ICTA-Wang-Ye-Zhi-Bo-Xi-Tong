@@ -6,7 +6,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2, Languages } from "lucide-react";
@@ -274,114 +274,65 @@ export default function AdminLogin() {
         </CardHeader>
         <CardContent>
           {mode === "login" ? (
-            <Form {...loginForm}>
-              <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
-                <FormField
-                  control={loginForm.control}
-                  name="username"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{s.username}</FormLabel>
-                      <FormControl>
-                        <Input placeholder={s.usernamePh} autoComplete="username" {...field} data-testid="input-username" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={loginForm.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{s.password}</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder={s.passwordPh} autoComplete="current-password" {...field} data-testid="input-password" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-login">
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {s.signInBtn}
-                </Button>
-              </form>
-            </Form>
+            <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="login-username">{s.username}</Label>
+                <Input id="login-username" placeholder={s.usernamePh} autoComplete="username" {...loginForm.register("username")} data-testid="input-username" />
+                {loginForm.formState.errors.username && (
+                  <p className="text-sm font-medium text-destructive">{loginForm.formState.errors.username.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="login-password">{s.password}</Label>
+                <Input id="login-password" type="password" placeholder={s.passwordPh} autoComplete="current-password" {...loginForm.register("password")} data-testid="input-password" />
+                {loginForm.formState.errors.password && (
+                  <p className="text-sm font-medium text-destructive">{loginForm.formState.errors.password.message}</p>
+                )}
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-login">
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {s.signInBtn}
+              </Button>
+            </form>
           ) : (
-            <Form {...registerForm}>
-              <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
-                <FormField
-                  control={registerForm.control}
-                  name="username"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{s.username}</FormLabel>
-                      <FormControl>
-                        <Input placeholder={s.chooseUsername} autoComplete="username" {...field} data-testid="input-reg-username" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={registerForm.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{s.email}</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder={s.emailPh} autoComplete="email" {...field} data-testid="input-reg-email" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={registerForm.control}
-                  name="companyName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{s.company} <span className="text-muted-foreground text-xs">{s.companyOpt}</span></FormLabel>
-                      <FormControl>
-                        <Input placeholder={s.companyPh} autoComplete="organization" {...field} data-testid="input-reg-company" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={registerForm.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{s.password}</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder={s.passwordMin} autoComplete="new-password" {...field} data-testid="input-reg-password" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={registerForm.control}
-                  name="confirmPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{s.confirmPw}</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder={s.confirmPwPh} autoComplete="new-password" {...field} data-testid="input-reg-confirm" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-register">
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {s.createBtn}
-                </Button>
-              </form>
-            </Form>
+            <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="reg-username">{s.username}</Label>
+                <Input id="reg-username" placeholder={s.chooseUsername} autoComplete="username" {...registerForm.register("username")} data-testid="input-reg-username" />
+                {registerForm.formState.errors.username && (
+                  <p className="text-sm font-medium text-destructive">{registerForm.formState.errors.username.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reg-email">{s.email}</Label>
+                <Input id="reg-email" type="email" placeholder={s.emailPh} autoComplete="email" {...registerForm.register("email")} data-testid="input-reg-email" />
+                {registerForm.formState.errors.email && (
+                  <p className="text-sm font-medium text-destructive">{registerForm.formState.errors.email.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reg-company">{s.company} <span className="text-muted-foreground text-xs">{s.companyOpt}</span></Label>
+                <Input id="reg-company" placeholder={s.companyPh} autoComplete="organization" {...registerForm.register("companyName")} data-testid="input-reg-company" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reg-password">{s.password}</Label>
+                <Input id="reg-password" type="password" placeholder={s.passwordMin} autoComplete="new-password" {...registerForm.register("password")} data-testid="input-reg-password" />
+                {registerForm.formState.errors.password && (
+                  <p className="text-sm font-medium text-destructive">{registerForm.formState.errors.password.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reg-confirm">{s.confirmPw}</Label>
+                <Input id="reg-confirm" type="password" placeholder={s.confirmPwPh} autoComplete="new-password" {...registerForm.register("confirmPassword")} data-testid="input-reg-confirm" />
+                {registerForm.formState.errors.confirmPassword && (
+                  <p className="text-sm font-medium text-destructive">{registerForm.formState.errors.confirmPassword.message}</p>
+                )}
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-register">
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {s.createBtn}
+              </Button>
+            </form>
           )}
 
           <div className="mt-6 text-center">
