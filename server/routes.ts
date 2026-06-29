@@ -23,7 +23,10 @@ import {
   insertWebinarSessionSchema,
   insertWebhookSchema,
   insertWebinarDocumentSchema,
+  insertEmailSequenceSchema,
+  insertSocialPostSchema,
 } from "@shared/schema";
+import { generateInteractions, generateEmailSequence, generateSocialPosts, getWebinarKnowledge } from "./aiGenerator";
 
 import bcrypt from "bcryptjs";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
@@ -31,6 +34,7 @@ import { looksLikeQuestion, answerViewerQuestion } from "./aiAssistant";
 
 // ===== AI 點數計費常數 =====
 const AI_POINTS_PER_REPLY = 1; // 每則 AI 回覆扣的點數
+const AI_POINTS_PER_GENERATION = 5; // 每次 AI 一鍵生成（互動 / 電子報 / 貼文）扣的點數
 const POINTS_PER_TWD = 1; // 1 元 = 1 點
 const RECHARGE_MIN_TWD = 100; // 自訂金額最低消費
 const RECHARGE_PACKAGES: Record<string, number> = { p300: 300, p1000: 1000, p3000: 3000 }; // 固定儲值包（元）
@@ -1960,6 +1964,247 @@ export async function registerRoutes(
 
   app.delete("/api/webinars/:id/documents/:docId", requireWebinarOwner, async (req, res) => {
     await storage.deleteWebinarDocument(req.params.id as string, req.params.docId as string);
+    res.json({ success: true });
+  });
+
+  // ============ AI 一鍵生成（互動 / 電子報 / 貼文）============
+  // 共用：預扣點數（reserve）。回 { ok, remaining } 或 { ok:false, reason }
+  async function reserveGenerationPoints(webinarId: string): Promise<{ ok: true; ownerId: string | null; reserved: boolean } | { ok: false; status: number; message: string }> {
+    const webinar = await storage.getWebinar(webinarId);
+    if (!webinar) return { ok: false, status: 404, message: "找不到直播間" };
+    const ownerId = webinar.userId || null;
+    const owner = ownerId ? await storage.getUser(ownerId) : undefined;
+    const unlimited = !!owner && (owner.isSuperAdmin || owner.subscriptionPlan === "enterprise");
+    if (unlimited) return { ok: true, ownerId, reserved: false };
+    if (!ownerId) return { ok: true, ownerId: null, reserved: false };
+    const remaining = await storage.deductAiPoints(ownerId, AI_POINTS_PER_GENERATION);
+    if (remaining === null) {
+      return { ok: false, status: 402, message: `AI 點數不足，本次生成需要 ${AI_POINTS_PER_GENERATION} 點，請先儲值` };
+    }
+    return { ok: true, ownerId, reserved: true };
+  }
+
+  // 1. 一鍵生成互動（假人聊天 / CTA / 投票 / 提示卡，含時間點）
+  app.post("/api/webinars/:id/ai/generate-interactions", requireWebinarOwner, async (req, res) => {
+    const webinarId = req.params.id as string;
+    const reserve = await reserveGenerationPoints(webinarId);
+    if (!reserve.ok) return res.status(reserve.status).json({ message: reserve.message });
+    try {
+      const webinar = await storage.getWebinar(webinarId);
+      if (!webinar) {
+        if (reserve.reserved && reserve.ownerId) await storage.addAiPoints(reserve.ownerId, AI_POINTS_PER_GENERATION);
+        return res.status(404).json({ message: "找不到直播間" });
+      }
+      const goal = typeof req.body?.goal === "string" ? req.body.goal : "";
+      const replace = req.body?.replace === true;
+      // 逐字稿來源：優先用請求帶的 transcript（含時間軸），否則用已存知識文檔
+      let transcript = typeof req.body?.transcript === "string" ? req.body.transcript : "";
+      if (!transcript.trim()) transcript = await getWebinarKnowledge(webinarId);
+
+      const result = await generateInteractions(webinar.title, transcript, webinar.videoDuration || 0, goal);
+      if (!result) {
+        if (reserve.reserved && reserve.ownerId) await storage.addAiPoints(reserve.ownerId, AI_POINTS_PER_GENERATION);
+        return res.status(502).json({ message: "AI 生成失敗，請稍後再試（未扣點）" });
+      }
+
+      // 可選：先清除既有互動內容
+      if (replace) {
+        const [msgs, ctas, tps, pls] = await Promise.all([
+          storage.getScheduledMessagesByWebinar(webinarId),
+          storage.getCtaButtonsByWebinar(webinarId),
+          storage.getTipsByWebinar(webinarId),
+          storage.getPollsByWebinar(webinarId),
+        ]);
+        await Promise.all([
+          ...msgs.map((m) => storage.deleteScheduledMessage(m.id)),
+          ...ctas.map((c) => storage.deleteCtaButton(c.id)),
+          ...tps.map((t) => storage.deleteTip(t.id)),
+          ...pls.map((p) => storage.deletePoll(p.id)),
+        ]);
+      }
+
+      // 建立假人並對應名稱 → id
+      const nameToId = new Map<string, string>();
+      for (const name of result.fakeUsers) {
+        const fu = await storage.createFakeUser({ webinarId, name });
+        nameToId.set(name, fu.id);
+      }
+      for (const m of result.messages) {
+        await storage.createScheduledMessage({
+          webinarId,
+          fakeUserId: nameToId.get(m.name) || null,
+          message: m.message,
+          triggerTime: m.triggerTime,
+          messageType: "chat",
+        } as any);
+      }
+      for (const p of result.polls) {
+        await storage.createPoll({ webinarId, question: p.question, options: p.options, triggerTime: p.triggerTime } as any);
+      }
+      for (const t of result.tips) {
+        await storage.createTip({ webinarId, title: t.title, content: t.content, triggerTime: t.triggerTime, icon: t.icon } as any);
+      }
+      for (const c of result.ctas) {
+        await storage.createCtaButton({ webinarId, text: c.text, url: c.url, startTime: c.startTime } as any);
+      }
+
+      res.json({
+        success: true,
+        counts: {
+          fakeUsers: result.fakeUsers.length,
+          messages: result.messages.length,
+          polls: result.polls.length,
+          tips: result.tips.length,
+          ctas: result.ctas.length,
+        },
+      });
+    } catch (error: any) {
+      if (reserve.reserved && reserve.ownerId) await storage.addAiPoints(reserve.ownerId, AI_POINTS_PER_GENERATION);
+      res.status(500).json({ message: error.message || "生成失敗（已退點）" });
+    }
+  });
+
+  // 2. 生成銷售追蹤電子報序列
+  app.post("/api/webinars/:id/ai/generate-email-sequence", requireWebinarOwner, async (req, res) => {
+    const webinarId = req.params.id as string;
+    const reserve = await reserveGenerationPoints(webinarId);
+    if (!reserve.ok) return res.status(reserve.status).json({ message: reserve.message });
+    try {
+      const webinar = await storage.getWebinar(webinarId);
+      if (!webinar) {
+        if (reserve.reserved && reserve.ownerId) await storage.addAiPoints(reserve.ownerId, AI_POINTS_PER_GENERATION);
+        return res.status(404).json({ message: "找不到直播間" });
+      }
+      const goal = typeof req.body?.goal === "string" ? req.body.goal : "";
+      const replace = req.body?.replace === true;
+      const knowledge = await getWebinarKnowledge(webinarId);
+      const emails = await generateEmailSequence(webinar.title, goal, knowledge);
+      if (!emails || emails.length === 0) {
+        if (reserve.reserved && reserve.ownerId) await storage.addAiPoints(reserve.ownerId, AI_POINTS_PER_GENERATION);
+        return res.status(502).json({ message: "AI 生成失敗，請稍後再試（未扣點）" });
+      }
+      if (replace) {
+        const existing = await storage.getEmailSequences(webinarId);
+        await Promise.all(existing.map((e) => storage.deleteEmailSequence(webinarId, e.id)));
+      }
+      let order = 0;
+      const created = [];
+      for (const e of emails) {
+        const seq = await storage.createEmailSequence({
+          webinarId,
+          name: e.name,
+          segment: e.segment,
+          delayMinutes: e.delayMinutes,
+          subject: e.subject,
+          htmlBody: e.htmlBody,
+          enabled: true,
+          sortOrder: order++,
+        } as any);
+        created.push(seq);
+      }
+      res.json({ success: true, count: created.length, sequences: created });
+    } catch (error: any) {
+      if (reserve.reserved && reserve.ownerId) await storage.addAiPoints(reserve.ownerId, AI_POINTS_PER_GENERATION);
+      res.status(500).json({ message: error.message || "生成失敗（已退點）" });
+    }
+  });
+
+  // 3. 生成排程社群貼文草稿
+  app.post("/api/webinars/:id/ai/generate-social-posts", requireWebinarOwner, async (req, res) => {
+    const webinarId = req.params.id as string;
+    const reserve = await reserveGenerationPoints(webinarId);
+    if (!reserve.ok) return res.status(reserve.status).json({ message: reserve.message });
+    try {
+      const webinar = await storage.getWebinar(webinarId);
+      if (!webinar) {
+        if (reserve.reserved && reserve.ownerId) await storage.addAiPoints(reserve.ownerId, AI_POINTS_PER_GENERATION);
+        return res.status(404).json({ message: "找不到直播間" });
+      }
+      const goal = typeof req.body?.goal === "string" ? req.body.goal : "";
+      const replace = req.body?.replace === true;
+      const knowledge = await getWebinarKnowledge(webinarId);
+      const posts = await generateSocialPosts(webinar.title, goal, knowledge);
+      if (!posts || posts.length === 0) {
+        if (reserve.reserved && reserve.ownerId) await storage.addAiPoints(reserve.ownerId, AI_POINTS_PER_GENERATION);
+        return res.status(502).json({ message: "AI 生成失敗，請稍後再試（未扣點）" });
+      }
+      if (replace) {
+        const existing = await storage.getSocialPosts(webinarId);
+        await Promise.all(existing.map((p) => storage.deleteSocialPost(webinarId, p.id)));
+      }
+      const created = [];
+      for (const p of posts) {
+        const sp = await storage.createSocialPost({ webinarId, platform: p.platform, content: p.content, status: "draft" } as any);
+        created.push(sp);
+      }
+      res.json({ success: true, count: created.length, posts: created });
+    } catch (error: any) {
+      if (reserve.reserved && reserve.ownerId) await storage.addAiPoints(reserve.ownerId, AI_POINTS_PER_GENERATION);
+      res.status(500).json({ message: error.message || "生成失敗（已退點）" });
+    }
+  });
+
+  // ============ Email Sequences CRUD ============
+  app.get("/api/webinars/:id/email-sequences", requireWebinarOwner, async (req, res) => {
+    const seqs = await storage.getEmailSequences(req.params.id as string);
+    res.json(seqs);
+  });
+
+  app.post("/api/webinars/:id/email-sequences", requireWebinarOwner, async (req, res) => {
+    try {
+      const data = insertEmailSequenceSchema.parse({ ...req.body, webinarId: req.params.id });
+      const seq = await storage.createEmailSequence(data);
+      res.json(seq);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/webinars/:id/email-sequences/:seqId", requireWebinarOwner, async (req, res) => {
+    try {
+      const { id, webinarId, createdAt, ...patch } = req.body || {};
+      const seq = await storage.updateEmailSequence(req.params.id as string, req.params.seqId as string, patch);
+      if (!seq) return res.status(404).json({ message: "找不到郵件" });
+      res.json(seq);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/webinars/:id/email-sequences/:seqId", requireWebinarOwner, async (req, res) => {
+    await storage.deleteEmailSequence(req.params.id as string, req.params.seqId as string);
+    res.json({ success: true });
+  });
+
+  // ============ Social Posts CRUD ============
+  app.get("/api/webinars/:id/social-posts", requireWebinarOwner, async (req, res) => {
+    const posts = await storage.getSocialPosts(req.params.id as string);
+    res.json(posts);
+  });
+
+  app.post("/api/webinars/:id/social-posts", requireWebinarOwner, async (req, res) => {
+    try {
+      const data = insertSocialPostSchema.parse({ ...req.body, webinarId: req.params.id });
+      const post = await storage.createSocialPost(data);
+      res.json(post);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/webinars/:id/social-posts/:postId", requireWebinarOwner, async (req, res) => {
+    try {
+      const { id, webinarId, createdAt, ...patch } = req.body || {};
+      const post = await storage.updateSocialPost(req.params.id as string, req.params.postId as string, patch);
+      if (!post) return res.status(404).json({ message: "找不到貼文" });
+      res.json(post);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/webinars/:id/social-posts/:postId", requireWebinarOwner, async (req, res) => {
+    await storage.deleteSocialPost(req.params.id as string, req.params.postId as string);
     res.json({ success: true });
   });
 

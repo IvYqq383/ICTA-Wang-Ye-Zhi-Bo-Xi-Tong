@@ -1,6 +1,6 @@
 import { storage } from "./storage";
 import { sendEmail } from "./gmail";
-import type { Webinar, Registration } from "@shared/schema";
+import type { Webinar, Registration, EmailSequence } from "@shared/schema";
 
 function getEmailHtml(type: string, name: string, webinarTitle: string, startTime: Date, webinarUrl: string, timezone: string = "Asia/Taipei", customSubject?: string, customTemplate?: string): { subject: string; html: string } {
   const formattedDate = startTime.toLocaleString('zh-TW', {
@@ -194,8 +194,94 @@ export async function createEmailRemindersForRegistration(
   }
 }
 
+function fillSequenceTemplate(seq: EmailSequence, name: string, webinarTitle: string, webinarUrl: string): { subject: string; html: string } {
+  const baseStyle = `
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+      .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+      .content { background: #f9fafb; padding: 30px; border-radius: 10px; }
+      .button { display: inline-block; background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; margin: 20px 0; }
+      .footer { text-align: center; color: #666; font-size: 14px; margin-top: 20px; }
+      a.button { color: #fff; }
+    </style>`;
+  const fill = (s: string) => (s || "")
+    .replace(/\{\{name\}\}/g, name)
+    .replace(/\{\{title\}\}/g, webinarTitle)
+    .replace(/\{\{url\}\}/g, webinarUrl);
+  return {
+    subject: fill(seq.subject),
+    html: `<!DOCTYPE html><html><head><meta charset="utf-8">${baseStyle}</head><body>
+      <div class="container">
+        <div class="content">${fill(seq.htmlBody)}</div>
+        <div class="footer"><p>此郵件由系統自動發送，請勿直接回覆。</p></div>
+      </div></body></html>`,
+  };
+}
+
+// 依觀看行為判斷觀眾屬於哪個分眾
+function matchesSegment(segment: string, reg: Registration, durationSec: number): boolean {
+  if (segment === "all") return true;
+  const attended = !!reg.attended;
+  if (segment === "no_show") return !attended;
+  // watched / not_watched 只針對有出席者
+  if (!attended) return false;
+  const watched = reg.watchDuration || 0;
+  const ratio = durationSec > 0 ? watched / durationSec : 0;
+  const WATCHED_THRESHOLD = 0.7; // 看完 70% 以上算 watched
+  if (segment === "watched") return ratio >= WATCHED_THRESHOLD;
+  if (segment === "not_watched") return ratio < WATCHED_THRESHOLD;
+  return false;
+}
+
+// 研討會結束後，為符合分眾的報名者排入追蹤序列郵件（idempotent）
+async function enqueueSequenceEmails() {
+  try {
+    const now = new Date();
+    const webinars = await storage.getAllWebinars();
+    for (const webinar of webinars) {
+      if (webinar.publishStatus !== "published") continue;
+      const duration = webinar.videoDuration || 3600;
+      const endTime = new Date(new Date(webinar.startTime).getTime() + duration * 1000);
+      if (endTime > now) continue; // 還沒結束
+
+      const sequences = await storage.getEnabledEmailSequences(webinar.id);
+      if (sequences.length === 0) continue;
+
+      const registrations = await storage.getRegistrationsByWebinar(webinar.id);
+      if (registrations.length === 0) continue;
+
+      for (const seq of sequences) {
+        const scheduledFor = new Date(endTime.getTime() + (seq.delayMinutes || 0) * 60 * 1000);
+        for (const reg of registrations) {
+          if (!matchesSegment(seq.segment, reg, duration)) continue;
+          const already = await storage.hasSequenceReminder(reg.id, seq.id);
+          if (already) continue;
+          try {
+            await storage.createEmailReminder({
+              webinarId: webinar.id,
+              registrationId: reg.id,
+              reminderType: "sequence",
+              sequenceId: seq.id,
+              scheduledFor,
+              status: "pending",
+            } as any);
+          } catch (err) {
+            console.error(`Failed to enqueue sequence ${seq.id} for reg ${reg.id}:`, err);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("enqueueSequenceEmails error:", err);
+  }
+}
+
 export function startEmailScheduler() {
   console.log("Email scheduler started - checking every 60 seconds");
+
+  // 每 5 分鐘掃描已結束研討會，排入追蹤序列郵件
+  enqueueSequenceEmails();
+  setInterval(enqueueSequenceEmails, 5 * 60 * 1000);
 
   setInterval(async () => {
     try {
@@ -225,17 +311,32 @@ export function startEmailScheduler() {
             : "http://localhost:5000";
           const webinarUrl = `${baseUrl}/webinar/${webinar.id}`;
 
-          const emailSettings = webinar.emailSettings as any;
-          const { subject, html } = getEmailHtml(
-            reminder.reminderType,
-            registration.name,
-            webinar.title,
-            new Date(webinar.startTime),
-            webinarUrl,
-            webinar.timezone || "Asia/Taipei",
-            emailSettings?.customSubject,
-            emailSettings?.customTemplate
-          );
+          let subject = "";
+          let html = "";
+          if (reminder.reminderType === "sequence" && reminder.sequenceId) {
+            const seq = await storage.getEmailSequence(reminder.sequenceId);
+            if (!seq) {
+              await storage.updateEmailReminder(reminder.id, { status: "failed", errorMessage: "Sequence not found" });
+              continue;
+            }
+            const filled = fillSequenceTemplate(seq, registration.name, webinar.title, webinarUrl);
+            subject = filled.subject;
+            html = filled.html;
+          } else {
+            const emailSettings = webinar.emailSettings as any;
+            const built = getEmailHtml(
+              reminder.reminderType,
+              registration.name,
+              webinar.title,
+              new Date(webinar.startTime),
+              webinarUrl,
+              webinar.timezone || "Asia/Taipei",
+              emailSettings?.customSubject,
+              emailSettings?.customTemplate
+            );
+            subject = built.subject;
+            html = built.html;
+          }
 
           if (subject && html) {
             await sendEmail({ to: registration.email, subject, htmlBody: html });

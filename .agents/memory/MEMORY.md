@@ -1,2 +1,3 @@
 - [WebSocket host authz](ws-host-authz.md) — WS host/viewer handlers must derive webinar/session from server-bound connection state + verified session ownership, never from client message data.
+- [Sequence email idempotency](email-sequence-idempotency.md) — post-webinar follow-up enqueue needs a DB partial unique index `(registration_id, sequence_id)`, not just app-level check-then-insert.
 - [AI point billing](ai-point-billing.md) — metered LLM calls reserve-then-refund (never check-then-charge); paid recharge credit must be one db transaction; verify session ownership before idempotency shortcut.

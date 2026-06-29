@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, real, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -370,12 +370,17 @@ export const emailReminders = pgTable("email_reminders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   registrationId: varchar("registration_id").notNull().references(() => registrations.id),
-  reminderType: text("reminder_type").notNull(), // confirmation, reminder_24h, reminder_1h, followup
+  reminderType: text("reminder_type").notNull(), // confirmation, reminder_24h, reminder_1h, followup, sequence
+  sequenceId: varchar("sequence_id"), // 若為追蹤序列郵件，指向 emailSequences.id
   scheduledFor: timestamp("scheduled_for").notNull(),
   sentAt: timestamp("sent_at"),
   status: text("status").notNull().default("pending"), // pending, sent, failed
   errorMessage: text("error_message"),
-});
+}, (table) => ({
+  regSeqUniq: uniqueIndex("email_reminders_reg_seq_uniq")
+    .on(table.registrationId, table.sequenceId)
+    .where(sql`sequence_id IS NOT NULL`),
+}));
 
 export const insertEmailReminderSchema = createInsertSchema(emailReminders).omit({ 
   id: true, sentAt: true, errorMessage: true 
@@ -488,3 +493,36 @@ export const webinarDocuments = pgTable("webinar_documents", {
 export const insertWebinarDocumentSchema = createInsertSchema(webinarDocuments).omit({ id: true, createdAt: true });
 export type InsertWebinarDocument = z.infer<typeof insertWebinarDocumentSchema>;
 export type WebinarDocument = typeof webinarDocuments.$inferSelect;
+
+// Email Sequences (AI 銷售追蹤電子報序列) - eWebinar 風格分眾追蹤
+export const emailSequences = pgTable("email_sequences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
+  name: text("name").notNull(), // 內部名稱（如「第 1 封：感謝+回放」）
+  segment: text("segment").notNull().default("all"), // all, watched, not_watched, no_show
+  delayMinutes: integer("delay_minutes").notNull().default(60), // 研討會結束後幾分鐘寄出
+  subject: text("subject").notNull(),
+  htmlBody: text("html_body").notNull(), // 支援 {{name}} {{title}} {{url}} 變數
+  enabled: boolean("enabled").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertEmailSequenceSchema = createInsertSchema(emailSequences).omit({ id: true, createdAt: true });
+export type InsertEmailSequence = z.infer<typeof insertEmailSequenceSchema>;
+export type EmailSequence = typeof emailSequences.$inferSelect;
+
+// Social Posts (AI 生成排程社群貼文草稿，無社群 API → 供手動發佈)
+export const socialPosts = pgTable("social_posts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
+  platform: text("platform").notNull().default("facebook"), // facebook, instagram, linkedin, x, threads
+  content: text("content").notNull(),
+  scheduledFor: timestamp("scheduled_for"), // 建議發佈時間（手動發佈用）
+  status: text("status").notNull().default("draft"), // draft, posted
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertSocialPostSchema = createInsertSchema(socialPosts).omit({ id: true, createdAt: true });
+export type InsertSocialPost = z.infer<typeof insertSocialPostSchema>;
+export type SocialPost = typeof socialPosts.$inferSelect;

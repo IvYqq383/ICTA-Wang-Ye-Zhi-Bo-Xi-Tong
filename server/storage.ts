@@ -21,6 +21,8 @@ import {
   webinarSessions, type InsertWebinarSession, type WebinarSession,
   webhooks, type InsertWebhook, type Webhook,
   webinarDocuments, type InsertWebinarDocument, type WebinarDocument,
+  emailSequences, type InsertEmailSequence, type EmailSequence,
+  socialPosts, type InsertSocialPost, type SocialPost,
   aiPointTransactions, type AiPointTransaction,
 } from "@shared/schema";
 
@@ -143,6 +145,21 @@ export interface IStorage {
   createWebinarDocument(data: InsertWebinarDocument): Promise<WebinarDocument>;
   getWebinarDocuments(webinarId: string): Promise<WebinarDocument[]>;
   deleteWebinarDocument(webinarId: string, id: string): Promise<void>;
+
+  // Email Sequences (AI 銷售追蹤序列)
+  createEmailSequence(data: InsertEmailSequence): Promise<EmailSequence>;
+  getEmailSequences(webinarId: string): Promise<EmailSequence[]>;
+  getEnabledEmailSequences(webinarId: string): Promise<EmailSequence[]>;
+  getEmailSequence(id: string): Promise<EmailSequence | undefined>;
+  updateEmailSequence(webinarId: string, id: string, data: Partial<EmailSequence>): Promise<EmailSequence | undefined>;
+  deleteEmailSequence(webinarId: string, id: string): Promise<void>;
+  hasSequenceReminder(registrationId: string, sequenceId: string): Promise<boolean>;
+
+  // Social Posts (AI 排程貼文草稿)
+  createSocialPost(data: InsertSocialPost): Promise<SocialPost>;
+  getSocialPosts(webinarId: string): Promise<SocialPost[]>;
+  updateSocialPost(webinarId: string, id: string, data: Partial<SocialPost>): Promise<SocialPost | undefined>;
+  deleteSocialPost(webinarId: string, id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -658,6 +675,77 @@ export class DatabaseStorage implements IStorage {
   async deleteWebinarDocument(webinarId: string, id: string): Promise<void> {
     await db.delete(webinarDocuments).where(
       and(eq(webinarDocuments.id, id), eq(webinarDocuments.webinarId, webinarId))
+    );
+  }
+
+  // Email Sequences
+  async createEmailSequence(data: InsertEmailSequence): Promise<EmailSequence> {
+    const result = await db.insert(emailSequences).values(data).returning();
+    return result[0];
+  }
+
+  async getEmailSequences(webinarId: string): Promise<EmailSequence[]> {
+    return db.select().from(emailSequences)
+      .where(eq(emailSequences.webinarId, webinarId))
+      .orderBy(asc(emailSequences.sortOrder), asc(emailSequences.createdAt));
+  }
+
+  async getEnabledEmailSequences(webinarId: string): Promise<EmailSequence[]> {
+    return db.select().from(emailSequences)
+      .where(and(eq(emailSequences.webinarId, webinarId), eq(emailSequences.enabled, true)))
+      .orderBy(asc(emailSequences.sortOrder), asc(emailSequences.createdAt));
+  }
+
+  async getEmailSequence(id: string): Promise<EmailSequence | undefined> {
+    const result = await db.select().from(emailSequences).where(eq(emailSequences.id, id));
+    return result[0];
+  }
+
+  async updateEmailSequence(webinarId: string, id: string, data: Partial<EmailSequence>): Promise<EmailSequence | undefined> {
+    const result = await db.update(emailSequences).set(data)
+      .where(and(eq(emailSequences.id, id), eq(emailSequences.webinarId, webinarId)))
+      .returning();
+    return result[0];
+  }
+
+  async deleteEmailSequence(webinarId: string, id: string): Promise<void> {
+    await db.delete(emailSequences).where(
+      and(eq(emailSequences.id, id), eq(emailSequences.webinarId, webinarId))
+    );
+  }
+
+  async hasSequenceReminder(registrationId: string, sequenceId: string): Promise<boolean> {
+    const result = await db.select({ id: emailReminders.id }).from(emailReminders)
+      .where(and(
+        eq(emailReminders.registrationId, registrationId),
+        eq(emailReminders.sequenceId, sequenceId)
+      ))
+      .limit(1);
+    return result.length > 0;
+  }
+
+  // Social Posts
+  async createSocialPost(data: InsertSocialPost): Promise<SocialPost> {
+    const result = await db.insert(socialPosts).values(data).returning();
+    return result[0];
+  }
+
+  async getSocialPosts(webinarId: string): Promise<SocialPost[]> {
+    return db.select().from(socialPosts)
+      .where(eq(socialPosts.webinarId, webinarId))
+      .orderBy(asc(socialPosts.scheduledFor), asc(socialPosts.createdAt));
+  }
+
+  async updateSocialPost(webinarId: string, id: string, data: Partial<SocialPost>): Promise<SocialPost | undefined> {
+    const result = await db.update(socialPosts).set(data)
+      .where(and(eq(socialPosts.id, id), eq(socialPosts.webinarId, webinarId)))
+      .returning();
+    return result[0];
+  }
+
+  async deleteSocialPost(webinarId: string, id: string): Promise<void> {
+    await db.delete(socialPosts).where(
+      and(eq(socialPosts.id, id), eq(socialPosts.webinarId, webinarId))
     );
   }
 }

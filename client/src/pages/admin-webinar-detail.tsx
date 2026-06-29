@@ -22,13 +22,14 @@ import {
   BarChart, Trash2, Loader2, Clock, Radio, Copy, ExternalLink,
   Lightbulb, HelpCircle, Star, TrendingUp, Settings, Code,
   Mail, Palette, Calendar, Edit, Save, RefreshCw, FileText, Eye,
-  Upload, ImagePlus, X, Bell, Link2, Download, Globe, Languages, Bot
+  Upload, ImagePlus, X, Bell, Link2, Download, Globe, Languages, Bot,
+  Sparkles, Megaphone
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, LineChart, Line } from "recharts";
-import type { Webinar, FakeUser, ScheduledMessage, CtaButton, Poll, Registration, Tip, Question, FeedbackSurvey, Webhook, WebinarDocument } from "@shared/schema";
+import type { Webinar, FakeUser, ScheduledMessage, CtaButton, Poll, Registration, Tip, Question, FeedbackSurvey, Webhook, WebinarDocument, EmailSequence, SocialPost } from "@shared/schema";
 import type { FeedbackResponse } from "@shared/schema";
 import { useAdminLang, type LangAdmin } from "@/hooks/use-lang";
 
@@ -443,6 +444,37 @@ const t: Record<LangAdmin, Record<string, string>> = {
     settingsInlineNote: "報名表單會自動嵌入到該容器中，支援時段選擇、品牌設定，並且會自動調整高度。",
     totalResponsesPrefix: "共 ",
     totalResponsesSuffix: " 份回覆",
+    aiGenInterTitle: "AI 一鍵生成互動",
+    aiGenInterDesc: "根據逐字稿（AI 助教知識文檔），自動生成假觀眾聊天、CTA、投票、提示卡，並標好時間點。",
+    aiGenInterBtn: "AI 一鍵生成互動",
+    aiGenGoalLabel: "目標 / 補充（選填）",
+    aiGenGoalPlaceholder: "例：推廣年度方案、引導加 LINE、強調限時優惠…",
+    aiGenReplace: "生成前先清除現有內容",
+    aiGenerating: "AI 生成中…可能需要 10-30 秒",
+    aiGenInterSuccess: "已生成互動內容",
+    aiGenFail: "AI 生成失敗，請稍後再試",
+    aiGenNoPoints: "AI 點數不足，請先儲值",
+    aiGenCostHint: "每次生成消耗 5 點 AI 點數",
+    seqTitle: "AI 銷售追蹤電子報",
+    seqDesc: "研討會結束後，依觀眾行為（看完 / 沒看完 / 沒出席）自動分眾寄送追蹤信，提升轉換。",
+    seqGenBtn: "AI 生成追蹤序列",
+    seqEmpty: "尚無追蹤郵件，點上方按鈕讓 AI 生成。",
+    seqSegAll: "全部",
+    seqSegWatched: "有看完",
+    seqSegNotWatched: "沒看完",
+    seqSegNoShow: "沒出席",
+    seqDelayLabel: "結束後幾分鐘寄出",
+    seqEnabledLabel: "啟用",
+    seqDelete: "刪除",
+    seqGenSuccess: "已生成追蹤郵件序列",
+    postTitle: "AI 行銷貼文",
+    postDesc: "AI 生成各平台社群宣傳貼文草稿（無串接社群 API，請複製後自行貼到平台發佈）。",
+    postGenBtn: "AI 生成貼文",
+    postEmpty: "尚無貼文，點上方按鈕讓 AI 生成。",
+    postCopy: "複製",
+    postCopied: "已複製貼文",
+    postDelete: "刪除",
+    postGenSuccess: "已生成行銷貼文",
   },
   "zh-CN": {
     valEnterName: "请输入名称",
@@ -835,6 +867,37 @@ const t: Record<LangAdmin, Record<string, string>> = {
     settingsInlineNote: "报名表单会自动嵌入到该容器中，支持时段选择、品牌设置，并且会自动调整高度。",
     totalResponsesPrefix: "共 ",
     totalResponsesSuffix: " 份回复",
+    aiGenInterTitle: "AI 一键生成互动",
+    aiGenInterDesc: "根据逐字稿（AI 助教知识文档），自动生成假观众聊天、CTA、投票、提示卡，并标好时间点。",
+    aiGenInterBtn: "AI 一键生成互动",
+    aiGenGoalLabel: "目标 / 补充（选填）",
+    aiGenGoalPlaceholder: "例：推广年度方案、引导加微信、强调限时优惠…",
+    aiGenReplace: "生成前先清除现有内容",
+    aiGenerating: "AI 生成中…可能需要 10-30 秒",
+    aiGenInterSuccess: "已生成互动内容",
+    aiGenFail: "AI 生成失败，请稍后再试",
+    aiGenNoPoints: "AI 点数不足，请先储值",
+    aiGenCostHint: "每次生成消耗 5 点 AI 点数",
+    seqTitle: "AI 销售追踪电子报",
+    seqDesc: "研讨会结束后，依观众行为（看完 / 没看完 / 没出席）自动分众寄送追踪信，提升转换。",
+    seqGenBtn: "AI 生成追踪序列",
+    seqEmpty: "尚无追踪邮件，点上方按钮让 AI 生成。",
+    seqSegAll: "全部",
+    seqSegWatched: "有看完",
+    seqSegNotWatched: "没看完",
+    seqSegNoShow: "没出席",
+    seqDelayLabel: "结束后几分钟寄出",
+    seqEnabledLabel: "启用",
+    seqDelete: "删除",
+    seqGenSuccess: "已生成追踪邮件序列",
+    postTitle: "AI 营销贴文",
+    postDesc: "AI 生成各平台社群宣传贴文草稿（无对接社群 API，请复制后自行贴到平台发布）。",
+    postGenBtn: "AI 生成贴文",
+    postEmpty: "尚无贴文，点上方按钮让 AI 生成。",
+    postCopy: "复制",
+    postCopied: "已复制贴文",
+    postDelete: "删除",
+    postGenSuccess: "已生成营销贴文",
   },
 };
 
@@ -1038,6 +1101,91 @@ export default function AdminWebinarDetail() {
   const { data: documents } = useQuery<WebinarDocument[]>({
     queryKey: ["/api/webinars", id, "documents"],
     enabled: !!id,
+  });
+
+  const { data: emailSequences } = useQuery<EmailSequence[]>({
+    queryKey: ["/api/webinars", id, "email-sequences"],
+    enabled: !!id,
+  });
+
+  const { data: socialPosts } = useQuery<SocialPost[]>({
+    queryKey: ["/api/webinars", id, "social-posts"],
+    enabled: !!id,
+  });
+
+  // AI 生成相關狀態
+  const [aiGenGoal, setAiGenGoal] = useState("");
+  const [aiGenReplace, setAiGenReplace] = useState(false);
+  const [seqGoal, setSeqGoal] = useState("");
+  const [postGoal, setPostGoal] = useState("");
+
+  const aiErrorTitle = (err: any) => {
+    const msg = String(err?.message || "");
+    if (msg.includes("402") || msg.includes("點數") || msg.includes("点数")) return s.aiGenNoPoints;
+    return s.aiGenFail;
+  };
+
+  const generateInteractions = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", `/api/webinars/${id}/ai/generate-interactions`, {
+        goal: aiGenGoal,
+        replace: aiGenReplace,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "scheduled-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "ctas"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "polls"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "tips"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "fake-users"] });
+      toast({ title: s.aiGenInterSuccess });
+    },
+    onError: (err) => toast({ title: aiErrorTitle(err), variant: "destructive" }),
+  });
+
+  const generateEmailSequence = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", `/api/webinars/${id}/ai/generate-email-sequence`, {
+        goal: seqGoal,
+        replace: true,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "email-sequences"] });
+      toast({ title: s.seqGenSuccess });
+    },
+    onError: (err) => toast({ title: aiErrorTitle(err), variant: "destructive" }),
+  });
+
+  const generateSocialPosts = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", `/api/webinars/${id}/ai/generate-social-posts`, {
+        goal: postGoal,
+        replace: true,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "social-posts"] });
+      toast({ title: s.postGenSuccess });
+    },
+    onError: (err) => toast({ title: aiErrorTitle(err), variant: "destructive" }),
+  });
+
+  const updateSequence = useMutation({
+    mutationFn: async ({ seqId, patch }: { seqId: string; patch: Partial<EmailSequence> }) => {
+      return apiRequest("PATCH", `/api/webinars/${id}/email-sequences/${seqId}`, patch);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "email-sequences"] }),
+  });
+
+  const deleteSequence = useMutation({
+    mutationFn: async (seqId: string) => apiRequest("DELETE", `/api/webinars/${id}/email-sequences/${seqId}`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "email-sequences"] }),
+  });
+
+  const deletePost = useMutation({
+    mutationFn: async (postId: string) => apiRequest("DELETE", `/api/webinars/${id}/social-posts/${postId}`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/webinars", id, "social-posts"] }),
   });
 
   useEffect(() => {
@@ -2528,12 +2676,199 @@ export default function AdminWebinarDetail() {
                   )}
                 </CardContent>
               </Card>
+
+              <Card className="border-primary/40 bg-primary/5">
+                <CardHeader className="flex flex-row items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                      {s.seqTitle}
+                    </CardTitle>
+                    <CardDescription>{s.seqDesc}</CardDescription>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => generateEmailSequence.mutate()}
+                    disabled={generateEmailSequence.isPending}
+                    data-testid="button-ai-gen-sequence"
+                  >
+                    {generateEmailSequence.isPending
+                      ? (<><Loader2 className="h-4 w-4 mr-1 animate-spin" />{s.aiGenerating}</>)
+                      : (<><Sparkles className="h-4 w-4 mr-1" />{s.seqGenBtn}</>)}
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Input
+                      value={seqGoal}
+                      onChange={(e) => setSeqGoal(e.target.value)}
+                      placeholder={s.aiGenGoalPlaceholder}
+                      data-testid="input-seq-goal"
+                    />
+                    <p className="text-xs text-muted-foreground">{s.aiGenCostHint}</p>
+                  </div>
+                  {emailSequences && emailSequences.length > 0 ? (
+                    <div className="space-y-3">
+                      {emailSequences.map((seq) => (
+                        <div key={seq.id} className="border rounded-md p-3 space-y-2 bg-background" data-testid={`row-sequence-${seq.id}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary" data-testid={`text-seq-segment-${seq.id}`}>
+                                {seq.segment === "watched" ? s.seqSegWatched : seq.segment === "not_watched" ? s.seqSegNotWatched : seq.segment === "no_show" ? s.seqSegNoShow : s.seqSegAll}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {s.seqDelayLabel}: {seq.delayMinutes}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={!!seq.enabled}
+                                onCheckedChange={(v) => updateSequence.mutate({ seqId: seq.id, patch: { enabled: v } })}
+                                data-testid={`switch-seq-enabled-${seq.id}`}
+                              />
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => deleteSequence.mutate(seq.id)}
+                                data-testid={`button-delete-seq-${seq.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="text-sm font-medium" data-testid={`text-seq-subject-${seq.id}`}>{seq.subject}</p>
+                          <div
+                            className="text-sm text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto border-t pt-2"
+                            data-testid={`text-seq-body-${seq.id}`}
+                          >
+                            {seq.htmlBody}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">{s.seqEmpty}</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-primary/40 bg-primary/5">
+                <CardHeader className="flex flex-row items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Megaphone className="h-4 w-4 text-primary" />
+                      {s.postTitle}
+                    </CardTitle>
+                    <CardDescription>{s.postDesc}</CardDescription>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => generateSocialPosts.mutate()}
+                    disabled={generateSocialPosts.isPending}
+                    data-testid="button-ai-gen-posts"
+                  >
+                    {generateSocialPosts.isPending
+                      ? (<><Loader2 className="h-4 w-4 mr-1 animate-spin" />{s.aiGenerating}</>)
+                      : (<><Sparkles className="h-4 w-4 mr-1" />{s.postGenBtn}</>)}
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Input
+                      value={postGoal}
+                      onChange={(e) => setPostGoal(e.target.value)}
+                      placeholder={s.aiGenGoalPlaceholder}
+                      data-testid="input-post-goal"
+                    />
+                    <p className="text-xs text-muted-foreground">{s.aiGenCostHint}</p>
+                  </div>
+                  {socialPosts && socialPosts.length > 0 ? (
+                    <div className="space-y-3">
+                      {socialPosts.map((post) => (
+                        <div key={post.id} className="border rounded-md p-3 space-y-2 bg-background" data-testid={`row-post-${post.id}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary uppercase" data-testid={`text-post-platform-${post.id}`}>
+                              {post.platform}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(post.content);
+                                  toast({ title: s.postCopied });
+                                }}
+                                data-testid={`button-copy-post-${post.id}`}
+                              >
+                                <Copy className="h-4 w-4 mr-1" />
+                                {s.postCopy}
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => deletePost.mutate(post.id)}
+                                data-testid={`button-delete-post-${post.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap" data-testid={`text-post-content-${post.id}`}>{post.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">{s.postEmpty}</p>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
 
           {/* ===== Interactions Tab ===== */}
           <TabsContent value="interactions">
             <div className="space-y-6">
+              <Card className="border-primary/40 bg-primary/5">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    {s.aiGenInterTitle}
+                  </CardTitle>
+                  <CardDescription>{s.aiGenInterDesc}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>{s.aiGenGoalLabel}</Label>
+                    <Input
+                      value={aiGenGoal}
+                      onChange={(e) => setAiGenGoal(e.target.value)}
+                      placeholder={s.aiGenGoalPlaceholder}
+                      data-testid="input-ai-gen-goal"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="ai-gen-replace"
+                      checked={aiGenReplace}
+                      onCheckedChange={(v) => setAiGenReplace(v === true)}
+                      data-testid="checkbox-ai-gen-replace"
+                    />
+                    <Label htmlFor="ai-gen-replace" className="cursor-pointer">{s.aiGenReplace}</Label>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">{s.aiGenCostHint}</p>
+                    <Button
+                      onClick={() => generateInteractions.mutate()}
+                      disabled={generateInteractions.isPending}
+                      data-testid="button-ai-gen-interactions"
+                    >
+                      {generateInteractions.isPending
+                        ? (<><Loader2 className="h-4 w-4 mr-1 animate-spin" />{s.aiGenerating}</>)
+                        : (<><Sparkles className="h-4 w-4 mr-1" />{s.aiGenInterBtn}</>)}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between gap-2">
                   <div>
