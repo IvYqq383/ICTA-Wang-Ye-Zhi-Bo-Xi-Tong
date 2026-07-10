@@ -117,8 +117,12 @@ export async function registerRoutes(
     next();
   });
 
+  // 健康檢查（部署平台用）
+  app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
   // ============ Image Upload ============
-  const uploadsDir = path.join(process.cwd(), "client", "public", "uploads");
+  // UPLOADS_DIR：正式環境可指向持久化磁碟（如 Render Disk 的掛載路徑）
+  const uploadsDir = process.env.UPLOADS_DIR || path.join(process.cwd(), "client", "public", "uploads");
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }

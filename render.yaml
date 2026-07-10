@@ -1,0 +1,28 @@
+# Render Blueprint — 在 Render 選「New +」→「Blueprint」並指向本倉庫即可一鍵建立
+# 文件：https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: icta-webinar
+    runtime: node
+    plan: starter            # WebSocket 聊天室 + 郵件排程需要不休眠的長駐主機；free 方案會閒置休眠且不能掛磁碟
+    region: singapore        # 距離 Supabase ap-northeast-2（首爾）最近的 Render 區域
+    branch: claude/automation-workshop-course-tnjdr6   # 合併回 main 後請改成 main
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    disk:                    # 持久化磁碟：讓上傳的封面圖不會因重新部署而消失
+      name: uploads
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: UPLOADS_DIR
+        value: /var/data/uploads
+      - key: SESSION_SECRET
+        generateValue: true  # Render 自動產生隨機值
+      - key: DATABASE_URL
+        sync: false          # 建立時會提示貼上（Supabase Session pooler 連線字串）
+      - key: RESEND_API_KEY
+        sync: false          # 建立時會提示貼上
+      - key: EMAIL_FROM
+        value: "ICTA-WEBINAR <onboarding@resend.dev>"  # wrich.studio 驗證後改成該網域寄件人
+      # ANTHROPIC_API_KEY 為選用，之後可在 Render Dashboard → Environment 手動加入

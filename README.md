@@ -52,6 +52,10 @@ npm run dev            # http://localhost:5000
 
 ## 正式部署
 
+**Render（推薦，已附設定檔）**：倉庫根目錄有 `render.yaml` Blueprint。在 Render 選「New +」→「Blueprint」→ 指向本倉庫，貼上 `DATABASE_URL` 與 `RESEND_API_KEY` 即完成（含持久化上傳磁碟與健康檢查）。
+
+其他主機手動部署：
+
 ```bash
 npm run build   # 產出 dist/（前端 + 單檔後端 dist/index.cjs）
 npm start       # NODE_ENV=production node dist/index.cjs

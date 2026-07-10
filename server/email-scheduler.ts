@@ -306,7 +306,7 @@ export function startEmailScheduler() {
             continue;
           }
 
-          const baseUrl = process.env.APP_URL || "http://localhost:5000";
+          const baseUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || "http://localhost:5000";
           const webinarUrl = `${baseUrl}/webinar/${webinar.id}`;
 
           let subject = "";
