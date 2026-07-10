@@ -1,3 +1,5 @@
+try { process.loadEnvFile(); } catch {}
+
 import { defineConfig } from "drizzle-kit";
 
 if (!process.env.DATABASE_URL) {

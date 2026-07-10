@@ -1,10 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { storage } from "./storage";
-
-const anthropic = new Anthropic({
-  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
-});
+import { getAnthropic, AI_MODEL } from "./anthropic";
 
 const MAX_CONTEXT_CHARS = 24000;
 
@@ -43,6 +38,12 @@ export async function answerViewerQuestion(
   fallbackMessage?: string,
 ): Promise<string | null> {
   try {
+    const anthropic = getAnthropic();
+    if (!anthropic) {
+      console.warn("AI 助教未啟用：缺少 ANTHROPIC_API_KEY 環境變數");
+      return null;
+    }
+
     const docs = await storage.getWebinarDocuments(webinarId);
 
     let knowledge = docs
@@ -70,7 +71,7 @@ export async function answerViewerQuestion(
     ].join("\n\n");
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model: AI_MODEL,
       max_tokens: 1024,
       system: systemPrompt,
       messages: [{ role: "user", content: question }],

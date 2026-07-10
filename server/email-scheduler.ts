@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import { sendEmail } from "./gmail";
+import { sendEmail } from "./email";
 import type { Webinar, Registration, EmailSequence } from "@shared/schema";
 
 function getEmailHtml(type: string, name: string, webinarTitle: string, startTime: Date, webinarUrl: string, timezone: string = "Asia/Taipei", customSubject?: string, customTemplate?: string): { subject: string; html: string } {
@@ -306,9 +306,7 @@ export function startEmailScheduler() {
             continue;
           }
 
-          const baseUrl = process.env.REPLIT_DEV_DOMAIN
-            ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-            : "http://localhost:5000";
+          const baseUrl = process.env.APP_URL || "http://localhost:5000";
           const webinarUrl = `${baseUrl}/webinar/${webinar.id}`;
 
           let subject = "";

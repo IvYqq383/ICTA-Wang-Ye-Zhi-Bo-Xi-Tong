@@ -1,12 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { storage } from "./storage";
+import { getAnthropic, AI_MODEL } from "./anthropic";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
-});
-
-const MODEL = "claude-sonnet-4-6";
 const MAX_CONTEXT_CHARS = 24000;
 
 // 從 AI 回覆中萃取 JSON（容忍 ```json 圍欄或前後雜訊）
@@ -29,8 +23,12 @@ function parseJson<T>(text: string): T | null {
 }
 
 async function callJson(system: string, user: string, maxTokens = 4096): Promise<string> {
+  const anthropic = getAnthropic();
+  if (!anthropic) {
+    throw new Error("AI 生成未啟用：缺少 ANTHROPIC_API_KEY 環境變數");
+  }
   const response = await anthropic.messages.create({
-    model: MODEL,
+    model: AI_MODEL,
     max_tokens: maxTokens,
     system,
     messages: [{ role: "user", content: user }],

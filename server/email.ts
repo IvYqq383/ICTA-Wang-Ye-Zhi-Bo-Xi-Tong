@@ -1,54 +1,7 @@
-// Gmail Integration - using Replit Google Mail connector
-import { google } from 'googleapis';
-
-let connectionSettings: any;
-
-async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
-  }
-  
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
-
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
-  }
-
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-mail',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
-    }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error('Gmail not connected');
-  }
-  return accessToken;
-}
-
-// WARNING: Never cache this client.
-// Access tokens expire, so a new client must be created each time.
-async function getUncachableGmailClient() {
-  const accessToken = await getAccessToken();
-
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({
-    access_token: accessToken
-  });
-
-  return google.gmail({ version: 'v1', auth: oauth2Client });
-}
+// Email 寄送 — 使用 Resend HTTP API (https://resend.com)
+// 環境變數：
+//   RESEND_API_KEY  Resend API 金鑰
+//   EMAIL_FROM      寄件人，需為 Resend 已驗證網域，例如 "ICTA-WEBINAR <noreply@yourdomain.com>"
 
 interface SendEmailParams {
   to: string;
@@ -56,44 +9,37 @@ interface SendEmailParams {
   htmlBody: string;
 }
 
+const RESEND_API_URL = "https://api.resend.com/emails";
+
 export async function sendEmail({ to, subject, htmlBody }: SendEmailParams) {
-  try {
-    const gmail = await getUncachableGmailClient();
-    
-    const message = [
-      'Content-Type: text/html; charset="UTF-8"',
-      'MIME-Version: 1.0',
-      `To: ${to}`,
-      `Subject: =?utf-8?B?${Buffer.from(subject).toString('base64')}?=`,
-      '',
-      htmlBody,
-    ].join('\r\n');
-
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: {
-        raw: encodedMessage,
-      },
-    });
-
-    console.log(`Email sent to ${to}`);
-    return true;
-  } catch (error) {
-    console.error('Failed to send email:', error);
-    throw error;
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.EMAIL_FROM;
+  if (!apiKey || !from) {
+    throw new Error("Email 未設定：請設定 RESEND_API_KEY 與 EMAIL_FROM 環境變數");
   }
+
+  const res = await fetch(RESEND_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ from, to: [to], subject, html: htmlBody }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Resend 寄信失敗 (${res.status}): ${detail}`);
+  }
+
+  console.log(`Email sent to ${to}`);
+  return true;
 }
 
 export async function sendWebinarRegistrationEmail(
-  email: string, 
-  name: string, 
-  webinarTitle: string, 
+  email: string,
+  name: string,
+  webinarTitle: string,
   startTime: Date,
   webinarUrl: string
 ) {
@@ -129,18 +75,18 @@ export async function sendWebinarRegistrationEmail(
         <div class="content">
           <p>親愛的 ${name}，</p>
           <p>感謝您報名參加我們的線上研討會！</p>
-          
+
           <div class="info">
             <h3>📺 ${webinarTitle}</h3>
             <p><strong>直播時間：</strong>${formattedDate}</p>
           </div>
-          
+
           <p>請在直播開始前點擊下方按鈕進入直播間：</p>
-          
+
           <center>
             <a href="${webinarUrl}" class="button">進入直播間</a>
           </center>
-          
+
           <p>如果您有任何問題，請隨時與我們聯繫。</p>
           <p>期待在直播中見到您！</p>
         </div>

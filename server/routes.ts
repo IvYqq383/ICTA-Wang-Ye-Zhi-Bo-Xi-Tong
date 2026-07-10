@@ -5,7 +5,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
-import { sendWebinarRegistrationEmail, sendQuestionNotificationEmail } from "./gmail";
+import { sendWebinarRegistrationEmail, sendQuestionNotificationEmail } from "./email";
 import { createEmailRemindersForRegistration, startEmailScheduler } from "./email-scheduler";
 import crypto from "crypto";
 import {

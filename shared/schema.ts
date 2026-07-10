@@ -1,10 +1,15 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, real, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgSchema, text, varchar, timestamp, integer, boolean, jsonb, real, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// 所有資料表放在獨立的 "webinar" schema，
+// 與同一個資料庫中其他系統（如課程平台的 public schema）完全隔離，
+// 也不會被 Supabase 的 REST API（只暴露 public schema）讀取。
+export const webinarDbSchema = pgSchema("webinar");
+
 // Webinars (直播間) - 擴展版
-export const webinars = pgTable("webinars", {
+export const webinars = webinarDbSchema.table("webinars", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id"),
   title: text("title").notNull(),
@@ -123,7 +128,7 @@ export type InsertWebinar = z.infer<typeof insertWebinarSchema>;
 export type Webinar = typeof webinars.$inferSelect;
 
 // Registrations (報名) - 擴展版
-export const registrations = pgTable("registrations", {
+export const registrations = webinarDbSchema.table("registrations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   name: text("name").notNull(),
@@ -167,7 +172,7 @@ export type InsertRegistration = z.infer<typeof insertRegistrationSchema>;
 export type Registration = typeof registrations.$inferSelect;
 
 // Fake Users / Bots (假人)
-export const fakeUsers = pgTable("fake_users", {
+export const fakeUsers = webinarDbSchema.table("fake_users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   name: text("name").notNull(),
@@ -179,7 +184,7 @@ export type InsertFakeUser = z.infer<typeof insertFakeUserSchema>;
 export type FakeUser = typeof fakeUsers.$inferSelect;
 
 // Scheduled Messages (預排訊息)
-export const scheduledMessages = pgTable("scheduled_messages", {
+export const scheduledMessages = webinarDbSchema.table("scheduled_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   fakeUserId: varchar("fake_user_id").references(() => fakeUsers.id),
@@ -193,7 +198,7 @@ export type InsertScheduledMessage = z.infer<typeof insertScheduledMessageSchema
 export type ScheduledMessage = typeof scheduledMessages.$inferSelect;
 
 // CTA Buttons (行動呼籲按鈕)
-export const ctaButtons = pgTable("cta_buttons", {
+export const ctaButtons = webinarDbSchema.table("cta_buttons", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   text: text("text").notNull(),
@@ -208,7 +213,7 @@ export type InsertCtaButton = z.infer<typeof insertCtaButtonSchema>;
 export type CtaButton = typeof ctaButtons.$inferSelect;
 
 // Tips (議程提示)
-export const tips = pgTable("tips", {
+export const tips = webinarDbSchema.table("tips", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   title: text("title").notNull(),
@@ -223,7 +228,7 @@ export type InsertTip = z.infer<typeof insertTipSchema>;
 export type Tip = typeof tips.$inferSelect;
 
 // Polls (投票)
-export const polls = pgTable("polls", {
+export const polls = webinarDbSchema.table("polls", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   question: text("question").notNull(),
@@ -237,7 +242,7 @@ export type InsertPoll = z.infer<typeof insertPollSchema>;
 export type Poll = typeof polls.$inferSelect;
 
 // Poll Votes (投票記錄)
-export const pollVotes = pgTable("poll_votes", {
+export const pollVotes = webinarDbSchema.table("poll_votes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   pollId: varchar("poll_id").notNull().references(() => polls.id),
   participantId: text("participant_id").notNull(), // could be registration id or session id
@@ -250,7 +255,7 @@ export type InsertPollVote = z.infer<typeof insertPollVoteSchema>;
 export type PollVote = typeof pollVotes.$inferSelect;
 
 // Questions (Q&A 問答)
-export const questions = pgTable("questions", {
+export const questions = webinarDbSchema.table("questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   registrationId: varchar("registration_id").references(() => registrations.id),
@@ -273,7 +278,7 @@ export type InsertQuestion = z.infer<typeof insertQuestionSchema>;
 export type Question = typeof questions.$inferSelect;
 
 // Feedback Surveys (結束問卷)
-export const feedbackSurveys = pgTable("feedback_surveys", {
+export const feedbackSurveys = webinarDbSchema.table("feedback_surveys", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   title: text("title").notNull().default("請給我們回饋"),
@@ -292,7 +297,7 @@ export type InsertFeedbackSurvey = z.infer<typeof insertFeedbackSurveySchema>;
 export type FeedbackSurvey = typeof feedbackSurveys.$inferSelect;
 
 // Feedback Responses (問卷回覆)
-export const feedbackResponses = pgTable("feedback_responses", {
+export const feedbackResponses = webinarDbSchema.table("feedback_responses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   surveyId: varchar("survey_id").notNull().references(() => feedbackSurveys.id),
   registrationId: varchar("registration_id").references(() => registrations.id),
@@ -307,7 +312,7 @@ export type InsertFeedbackResponse = z.infer<typeof insertFeedbackResponseSchema
 export type FeedbackResponse = typeof feedbackResponses.$inferSelect;
 
 // Viewer Progress (觀看進度)
-export const viewerProgress = pgTable("viewer_progress", {
+export const viewerProgress = webinarDbSchema.table("viewer_progress", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   registrationId: varchar("registration_id").references(() => registrations.id),
@@ -325,7 +330,7 @@ export type InsertViewerProgress = z.infer<typeof insertViewerProgressSchema>;
 export type ViewerProgress = typeof viewerProgress.$inferSelect;
 
 // Webinar Analytics (數據分析)
-export const webinarAnalytics = pgTable("webinar_analytics", {
+export const webinarAnalytics = webinarDbSchema.table("webinar_analytics", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   sessionDate: timestamp("session_date").notNull(),
@@ -366,7 +371,7 @@ export type InsertWebinarAnalytics = z.infer<typeof insertWebinarAnalyticsSchema
 export type WebinarAnalytics = typeof webinarAnalytics.$inferSelect;
 
 // Email Reminders (Email 提醒排程)
-export const emailReminders = pgTable("email_reminders", {
+export const emailReminders = webinarDbSchema.table("email_reminders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   registrationId: varchar("registration_id").notNull().references(() => registrations.id),
@@ -389,7 +394,7 @@ export type InsertEmailReminder = z.infer<typeof insertEmailReminderSchema>;
 export type EmailReminder = typeof emailReminders.$inferSelect;
 
 // Chat Messages (即時聊天)
-export const chatMessages = pgTable("chat_messages", {
+export const chatMessages = webinarDbSchema.table("chat_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   sessionId: varchar("session_id"), // 觀眾獨立場次 ID（null = 公開訊息/主持人訊息）
@@ -405,7 +410,7 @@ export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 
 // Likes (按讚)
-export const likes = pgTable("likes", {
+export const likes = webinarDbSchema.table("likes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   count: integer("count").notNull().default(0),
@@ -416,7 +421,7 @@ export type InsertLike = z.infer<typeof insertLikeSchema>;
 export type Like = typeof likes.$inferSelect;
 
 // Users (SaaS 帳號)
-export const users = pgTable("users", {
+export const users = webinarDbSchema.table("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
@@ -438,7 +443,7 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
 // AI 點數交易記錄（充值 / 後台贈送），用於 Stripe 充值的冪等保護
-export const aiPointTransactions = pgTable("ai_point_transactions", {
+export const aiPointTransactions = webinarDbSchema.table("ai_point_transactions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
   type: text("type").notNull(), // purchase, grant
@@ -453,7 +458,7 @@ export type InsertAiPointTransaction = z.infer<typeof insertAiPointTransactionSc
 export type AiPointTransaction = typeof aiPointTransactions.$inferSelect;
 
 // Webinar Sessions (用於循環排程的場次)
-export const webinarSessions = pgTable("webinar_sessions", {
+export const webinarSessions = webinarDbSchema.table("webinar_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   scheduledStart: timestamp("scheduled_start").notNull(),
@@ -467,7 +472,7 @@ export type InsertWebinarSession = z.infer<typeof insertWebinarSessionSchema>;
 export type WebinarSession = typeof webinarSessions.$inferSelect;
 
 // Webhooks (Webhook 整合)
-export const webhooks = pgTable("webhooks", {
+export const webhooks = webinarDbSchema.table("webhooks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   eventType: text("event_type").notNull(), // registration, completion, attendance
@@ -482,7 +487,7 @@ export type InsertWebhook = z.infer<typeof insertWebhookSchema>;
 export type Webhook = typeof webhooks.$inferSelect;
 
 // Webinar Documents (AI 助教知識文檔)
-export const webinarDocuments = pgTable("webinar_documents", {
+export const webinarDocuments = webinarDbSchema.table("webinar_documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   title: text("title").notNull(),
@@ -495,7 +500,7 @@ export type InsertWebinarDocument = z.infer<typeof insertWebinarDocumentSchema>;
 export type WebinarDocument = typeof webinarDocuments.$inferSelect;
 
 // Email Sequences (AI 銷售追蹤電子報序列) - eWebinar 風格分眾追蹤
-export const emailSequences = pgTable("email_sequences", {
+export const emailSequences = webinarDbSchema.table("email_sequences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   name: text("name").notNull(), // 內部名稱（如「第 1 封：感謝+回放」）
@@ -513,7 +518,7 @@ export type InsertEmailSequence = z.infer<typeof insertEmailSequenceSchema>;
 export type EmailSequence = typeof emailSequences.$inferSelect;
 
 // Social Posts (AI 生成排程社群貼文草稿，無社群 API → 供手動發佈)
-export const socialPosts = pgTable("social_posts", {
+export const socialPosts = webinarDbSchema.table("social_posts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   webinarId: varchar("webinar_id").notNull().references(() => webinars.id),
   platform: text("platform").notNull().default("facebook"), // facebook, instagram, linkedin, x, threads

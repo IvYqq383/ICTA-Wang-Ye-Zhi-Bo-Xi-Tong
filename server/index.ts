@@ -1,14 +1,10 @@
+import "./loadEnv";
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { runMigrations } from "stripe-replit-sync";
-import { getStripeSync } from "./stripeClient";
-import { WebhookHandlers } from "./webhookHandlers";
-import bcrypt from "bcryptjs";
-import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
@@ -23,12 +19,18 @@ declare module "http" {
 
 const PgStore = connectPgSimple(session);
 
+const sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret && process.env.NODE_ENV === "production") {
+  throw new Error("SESSION_SECRET 未設定：正式環境必須提供隨機的 SESSION_SECRET 環境變數");
+}
+
 const sessionMiddleware = session({
   store: new PgStore({
     conString: process.env.DATABASE_URL,
+    schemaName: process.env.DB_SCHEMA || "webinar",
     createTableIfMissing: true,
   }),
-  secret: process.env.SESSION_SECRET || "webinar-secret-key-2024",
+  secret: sessionSecret || "dev-only-insecure-secret",
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -40,29 +42,6 @@ const sessionMiddleware = session({
 });
 
 app.use(sessionMiddleware);
-
-app.post(
-  '/api/stripe/webhook',
-  express.raw({ type: 'application/json' }),
-  async (req, res) => {
-    const signature = req.headers['stripe-signature'];
-    if (!signature) {
-      return res.status(400).json({ error: 'Missing stripe-signature' });
-    }
-    try {
-      const sig = Array.isArray(signature) ? signature[0] : signature;
-      if (!Buffer.isBuffer(req.body)) {
-        console.error('STRIPE WEBHOOK ERROR: req.body is not a Buffer.');
-        return res.status(500).json({ error: 'Webhook processing error' });
-      }
-      await WebhookHandlers.processWebhook(req.body as Buffer, sig);
-      res.status(200).json({ received: true });
-    } catch (error: any) {
-      console.error('Webhook error:', error.message);
-      res.status(400).json({ error: 'Webhook processing error' });
-    }
-  }
-);
 
 app.use(
   express.json({
@@ -112,59 +91,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  try {
-    const databaseUrl = process.env.DATABASE_URL;
-    if (databaseUrl) {
-      log('Initializing Stripe schema...', 'stripe');
-      await runMigrations({ databaseUrl });
-      log('Stripe schema ready', 'stripe');
-
-      const stripeSync = await getStripeSync();
-
-      const webhookBaseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
-      const { webhook } = await stripeSync.findOrCreateManagedWebhook(
-        `${webhookBaseUrl}/api/stripe/webhook`
-      );
-      log(`Webhook configured: ${webhook.url}`, 'stripe');
-
-      stripeSync.syncBackfill()
-        .then(() => log('Stripe data synced', 'stripe'))
-        .catch((err: any) => console.error('Error syncing Stripe data:', err));
-    }
-  } catch (error) {
-    console.error('Failed to initialize Stripe:', error);
-  }
-
-  try {
-    let adminUser = await storage.getUserByUsername("admin");
-    if (!adminUser) {
-      const hashedPassword = await bcrypt.hash("aa3210", 10);
-      try {
-        await storage.createUser({
-          username: "admin",
-          password: hashedPassword,
-          email: "admin@icta-webinar.com",
-          companyName: "ICTA",
-        });
-        log("Default admin account created (admin / aa3210)", "seed");
-      } catch (insertErr: any) {
-        if (!String(insertErr?.message || "").toLowerCase().includes("unique")) {
-          throw insertErr;
-        }
-      }
-      adminUser = await storage.getUserByUsername("admin");
-    }
-    if (adminUser && (!adminUser.isSuperAdmin || adminUser.subscriptionPlan !== "enterprise")) {
-      await storage.updateUser(adminUser.id, {
-        isSuperAdmin: true,
-        subscriptionPlan: "enterprise",
-        maxWebinars: 999,
-      });
-    }
-  } catch (err) {
-    console.error("Failed to seed admin account:", err);
-  }
-
+  // 管理員帳號不再自動種入資料庫。
+  // 首次安裝請執行：npm run create-admin -- <帳號> <Email> [密碼]
   await registerRoutes(httpServer, app, sessionMiddleware);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

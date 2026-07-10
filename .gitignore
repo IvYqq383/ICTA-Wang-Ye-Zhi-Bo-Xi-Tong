@@ -4,3 +4,11 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# 環境變數（含金鑰，勿入版控）
+.env
+.env.*
+!.env.example
+
+# 使用者上傳的圖片
+client/public/uploads/

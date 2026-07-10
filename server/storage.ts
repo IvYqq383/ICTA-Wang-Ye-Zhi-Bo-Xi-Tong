@@ -33,6 +33,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   listAllUsers(): Promise<User[]>;
   updateUser(id: string, data: Partial<Omit<User, "id" | "password" | "createdAt">>): Promise<User | undefined>;
+  updateUserPassword(id: string, hashedPassword: string): Promise<void>;
   getWebinarCountByUser(userId: string): Promise<number>;
   getPublishedWebinarCountByUser(userId: string): Promise<number>;
   getUserByStripeCustomerId(stripeCustomerId: string): Promise<User | undefined>;
@@ -186,6 +187,10 @@ export class DatabaseStorage implements IStorage {
   async updateUser(id: string, data: Partial<Omit<User, "id" | "password" | "createdAt">>): Promise<User | undefined> {
     const result = await db.update(users).set(data).where(eq(users.id, id)).returning();
     return result[0];
+  }
+
+  async updateUserPassword(id: string, hashedPassword: string): Promise<void> {
+    await db.update(users).set({ password: hashedPassword }).where(eq(users.id, id));
   }
 
   async getWebinarCountByUser(userId: string): Promise<number> {
