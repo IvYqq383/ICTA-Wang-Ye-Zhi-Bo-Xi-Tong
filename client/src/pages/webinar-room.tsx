@@ -38,6 +38,18 @@ export default function WebinarRoom() {
     }
     return storedSession;
   });
+
+  // 報名編號：優先取網址 ?reg=（信件連結／課程平台帶入），否則取上次報名時存的值。
+  // 有這個編號才能記錄出席與觀看時長。
+  const [registrationId] = useState<string | null>(() => {
+    const storageKey = `webinar_reg_${id}`;
+    const fromUrl = new URLSearchParams(window.location.search).get("reg");
+    if (fromUrl) {
+      localStorage.setItem(storageKey, fromUrl);
+      return fromUrl;
+    }
+    return localStorage.getItem(storageKey);
+  });
   
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -126,7 +138,7 @@ export default function WebinarRoom() {
   });
 
   const saveProgressMutation = useMutation({
-    mutationFn: async (data: { viewerSessionId: string; lastPosition: number; totalWatched: number }) => {
+    mutationFn: async (data: { viewerSessionId: string; lastPosition: number; totalWatched: number; registrationId?: string }) => {
       return apiRequest("POST", `/api/webinars/${id}/progress`, data);
     },
   });
@@ -234,13 +246,30 @@ export default function WebinarRoom() {
         viewerSessionId: sessionId,
         lastPosition: currentTime,
         totalWatched: currentTime,
+        registrationId: registrationId || undefined,
       });
     }, 30000);
 
     return () => {
       if (progressSaveRef.current) clearInterval(progressSaveRef.current);
     };
-  }, [isJoined, isPlaying, currentTime, sessionId]);
+  }, [isJoined, isPlaying, currentTime, sessionId, registrationId]);
+
+  // 進場記錄出席、離場記錄離開時間（sendBeacon 在關閉分頁時也送得出去）
+  useEffect(() => {
+    if (!isJoined || !registrationId) return;
+
+    apiRequest("POST", `/api/registrations/${registrationId}/attend`).catch(() => {});
+
+    const markLeave = () => {
+      navigator.sendBeacon(`/api/registrations/${registrationId}/leave`);
+    };
+    window.addEventListener("pagehide", markLeave);
+    return () => {
+      window.removeEventListener("pagehide", markLeave);
+      markLeave();
+    };
+  }, [isJoined, registrationId]);
 
   useEffect(() => {
     if (!ctas) return;

@@ -124,13 +124,18 @@ export default function Registration() {
       if (Object.keys(customFieldValues).length > 0) {
         payload.customFieldData = customFieldValues;
       }
-      return apiRequest("POST", "/api/registrations", payload);
+      const res = await apiRequest("POST", "/api/registrations", payload);
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (registration: any) => {
+      // 記住報名編號，進直播間時才能記錄出席
+      if (registration?.id) {
+        localStorage.setItem(`webinar_reg_${id}`, registration.id);
+      }
       setRegistered(true);
       toast({
         title: "報名成功！",
-        description: "確認信已發送到您的 Email",
+        description: registration?.already ? "您先前已報名過，確認信不再重寄" : "確認信已發送到您的 Email",
       });
     },
     onError: (error: any) => {

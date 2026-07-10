@@ -820,8 +820,9 @@ export async function registerRoutes(
       const webinars = await storage.getWebinarsByUser(req.session.userId);
       return res.json(webinars);
     }
+    // 未登入只回傳已發佈的直播間（草稿不外洩）
     const webinars = await storage.getAllWebinars();
-    res.json(webinars);
+    res.json(webinars.filter((w) => w.publishStatus === "published"));
   });
 
   app.get("/api/webinars/stats/summary", requireAdmin, async (req, res) => {
@@ -1231,9 +1232,10 @@ export async function registerRoutes(
       
       const existing = await storage.getRegistrationByEmail(data.webinarId, data.email);
       if (existing) {
-        return res.status(400).json({ message: "此 Email 已報名" });
+        // 冪等：同 Email 重複報名回傳既有報名（不重寄信），方便外部系統（如課程平台）一鍵進場
+        return res.json({ ...existing, already: true });
       }
-      
+
       const registration = await storage.createRegistration(data);
       
       dispatchWebhook(data.webinarId, "registration", {
@@ -1243,7 +1245,8 @@ export async function registerRoutes(
       const webinar = await storage.getWebinar(data.webinarId);
       if (webinar) {
         const baseUrl = `${req.protocol}://${req.get("host")}`;
-        const webinarUrl = `${baseUrl}/webinar/${data.webinarId}`;
+        // 帶上報名編號，觀眾點信件連結進場才能記錄出席與觀看時長
+        const webinarUrl = `${baseUrl}/webinar/${data.webinarId}?reg=${registration.id}`;
         const emailSettings = webinar.emailSettings as any;
         
         if (!emailSettings || emailSettings.confirmationEnabled !== false) {
@@ -1311,7 +1314,9 @@ export async function registerRoutes(
     try {
       const registration = await storage.getRegistration(req.params.id);
       if (registration && registration.attendedAt) {
-        const watchDuration = Math.floor((Date.now() - new Date(registration.attendedAt).getTime()) / 1000);
+        // 取「實際觀看秒數（progress 回報）」與「在場時鐘時間」較大者，避免互相覆蓋
+        const wallClockSeconds = Math.floor((Date.now() - new Date(registration.attendedAt).getTime()) / 1000);
+        const watchDuration = Math.max(registration.watchDuration || 0, wallClockSeconds);
         const updated = await storage.updateRegistration(req.params.id, {
           leftAt: new Date(),
           watchDuration,
@@ -1568,6 +1573,14 @@ export async function registerRoutes(
         webinarId: req.params.id
       });
       const progress = await storage.upsertViewerProgress(data);
+      // 已報名的觀眾：同步累積觀看時長到報名記錄（供出席率與追蹤信分眾使用）
+      if (data.registrationId && typeof data.totalWatched === "number") {
+        try {
+          await storage.updateRegistration(data.registrationId, {
+            watchDuration: data.totalWatched,
+          });
+        } catch {}
+      }
       res.json(progress);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -1901,32 +1914,6 @@ export async function registerRoutes(
 
   // Start email scheduler
   startEmailScheduler();
-
-  // ============ Mark Attendance ============
-  app.post("/api/registrations/:id/attend", async (req, res) => {
-    try {
-      const registration = await storage.updateRegistration(req.params.id as string, {
-        attended: true,
-        attendedAt: new Date(),
-      });
-      res.json(registration);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/registrations/:id/leave", async (req, res) => {
-    try {
-      const { watchDuration } = req.body;
-      const registration = await storage.updateRegistration(req.params.id as string, {
-        leftAt: new Date(),
-        watchDuration,
-      });
-      res.json(registration);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
 
   // ============ Webhooks ============
   async function dispatchWebhook(webinarId: string, eventType: string, payload: any) {

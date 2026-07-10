@@ -127,7 +127,7 @@ export async function createEmailRemindersForRegistration(
   const emailSettings = webinar.emailSettings as any;
   if (!emailSettings) return;
 
-  const webinarUrl = `${baseUrl}/webinar/${webinar.id}`;
+  const webinarUrl = `${baseUrl}/webinar/${webinar.id}?reg=${registration.id}`;
   const startTime = new Date(webinar.startTime);
   const now = new Date();
 
@@ -173,7 +173,7 @@ export async function createEmailRemindersForRegistration(
 
   if (emailSettings.confirmationEnabled) {
     try {
-      const webinarUrl = `${baseUrl}/webinar/${webinar.id}`;
+      const webinarUrl = `${baseUrl}/webinar/${webinar.id}?reg=${registration.id}`;
       const { subject, html } = getEmailHtml(
         "confirmation",
         registration.name,
@@ -307,7 +307,7 @@ export function startEmailScheduler() {
           }
 
           const baseUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || "http://localhost:5000";
-          const webinarUrl = `${baseUrl}/webinar/${webinar.id}`;
+          const webinarUrl = `${baseUrl}/webinar/${webinar.id}?reg=${reminder.registrationId}`;
 
           let subject = "";
           let html = "";
