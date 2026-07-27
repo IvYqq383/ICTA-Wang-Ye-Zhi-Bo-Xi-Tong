@@ -273,12 +273,16 @@ export default function WebinarRoom() {
 
   useEffect(() => {
     if (!ctas) return;
-    const visible = ctas.filter((cta) => {
+    const active = ctas.filter((cta) => {
       const isAfterStart = currentTime >= cta.startTime;
       const isBeforeEnd = !cta.endTime || currentTime <= cta.endTime;
       return isAfterStart && isBeforeEnd;
     });
-    setVisibleCtas(visible);
+    // 只顯示時間區間有重疊時「最近觸發」的一個，避免多個 CTA 疊在畫面上
+    const latest = active.length > 0
+      ? active.reduce((a, b) => (b.startTime > a.startTime ? b : a))
+      : null;
+    setVisibleCtas(latest ? [latest] : []);
   }, [currentTime, ctas]);
   
   useEffect(() => {

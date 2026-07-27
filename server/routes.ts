@@ -2063,7 +2063,7 @@ export async function registerRoutes(
         await storage.createTip({ webinarId, title: t.title, content: t.content, triggerTime: t.triggerTime, icon: t.icon } as any);
       }
       for (const c of result.ctas) {
-        await storage.createCtaButton({ webinarId, text: c.text, url: c.url, startTime: c.startTime } as any);
+        await storage.createCtaButton({ webinarId, text: c.text, url: c.url, startTime: c.startTime, endTime: c.endTime } as any);
       }
 
       res.json({

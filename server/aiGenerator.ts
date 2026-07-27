@@ -63,8 +63,11 @@ export interface GeneratedInteractions {
   messages: { name: string; message: string; triggerTime: number }[];
   polls: { question: string; options: string[]; triggerTime: number }[];
   tips: { title: string; content: string; triggerTime: number; icon: string }[];
-  ctas: { text: string; url: string; startTime: number }[];
+  ctas: { text: string; url: string; startTime: number; endTime: number | null }[];
 }
+
+// CTA 按鈕預設顯示時長（秒）；實際會被下一個 CTA 的開始時間截短，確保彼此不重疊
+const CTA_DEFAULT_DURATION_SEC = 120;
 
 export async function generateInteractions(
   webinarTitle: string,
@@ -131,13 +134,22 @@ export async function generateInteractions(
         icon: ["info", "tip", "warning", "agenda"].includes(t.icon) ? t.icon : "info",
       }));
 
-    const ctas = (Array.isArray(parsed.ctas) ? parsed.ctas : [])
+    const ctasSorted = (Array.isArray(parsed.ctas) ? parsed.ctas : [])
       .filter((c) => c && typeof c.text === "string" && c.text.trim())
       .map((c) => ({
         text: c.text.trim(),
         url: typeof c.url === "string" && c.url.trim() ? c.url.trim() : "#",
         startTime: clampTime(c.startTime, durationSec),
-      }));
+      }))
+      .sort((a, b) => a.startTime - b.startTime);
+
+    // 結束時間 = 觸發後 120 秒，但不晚於下一個 CTA 開始的時間，避免多個 CTA 同時顯示疊在畫面上
+    const ctas = ctasSorted.map((c, i) => {
+      const next = ctasSorted[i + 1];
+      const cap = next ? next.startTime : (durationSec > 0 ? durationSec : c.startTime + CTA_DEFAULT_DURATION_SEC);
+      const endTime = Math.max(c.startTime + 1, Math.min(c.startTime + CTA_DEFAULT_DURATION_SEC, cap));
+      return { ...c, endTime };
+    });
 
     return { fakeUsers, messages, polls, tips, ctas };
   } catch (error) {
