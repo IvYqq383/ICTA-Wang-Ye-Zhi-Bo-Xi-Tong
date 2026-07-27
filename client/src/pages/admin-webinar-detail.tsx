@@ -4268,7 +4268,7 @@ export default function AdminWebinarDetail() {
                     <Label>{s.settingsCoverImage}</Label>
                     {editCoverImage ? (
                       <div className="relative rounded-md overflow-hidden border">
-                        <img src={editCoverImage} alt={s.altCoverPreview} className="w-full h-32 object-cover" />
+                        <img src={editCoverImage} alt={s.altCoverPreview} className="w-full h-auto" />
                         <Button
                           variant="outline"
                           size="icon"

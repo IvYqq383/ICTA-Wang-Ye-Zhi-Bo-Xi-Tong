@@ -297,7 +297,7 @@ export default function EmbedRegister() {
         <img
           src={webinar.coverImage}
           alt={webinar.title}
-          className="w-full h-36 object-cover rounded-md mb-3"
+          className="w-full h-auto rounded-md mb-3"
           data-testid="img-embed-cover"
         />
       )}

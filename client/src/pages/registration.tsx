@@ -324,7 +324,7 @@ export default function Registration() {
             <img
               src={webinar.coverImage}
               alt={webinar.title}
-              className="w-full h-48 object-cover rounded-md mb-4"
+              className="w-full h-auto rounded-md mb-4"
             />
           )}
           <CardTitle className="text-2xl">{webinar.title}</CardTitle>
