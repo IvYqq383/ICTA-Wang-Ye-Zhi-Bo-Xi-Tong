@@ -905,6 +905,16 @@ const t: Record<LangAdmin, Record<string, string>> = {
   },
 };
 
+// 產生嵌入報名表單的 iframe 程式碼：內含一段極小的自適應高度腳本，
+// 監聽 embed-register 頁面透過 postMessage 回報的實際內容高度（見 embed-register.tsx），
+// 讓貼到外部網站的表單不論有沒有設封面圖片、封面比例為何，都不會被裁切或留白。
+function getEmbedRegisterCode(webinarId: string): string {
+  const frameId = `livecast-reg-${webinarId}`;
+  const src = `${window.location.origin}/embed/register/${webinarId}`;
+  return `<iframe id="${frameId}" src="${src}" width="100%" height="500" frameborder="0" style="border:none;border-radius:12px;max-width:460px;display:block;"></iframe>
+<script>(function(){var f=document.getElementById("${frameId}");if(!f)return;window.addEventListener("message",function(e){if(e.data&&e.data.type==="livecast:resize"&&e.source===f.contentWindow){f.style.height=(e.data.height+20)+"px";}});})();</script>`;
+}
+
 function createSchemas(s: Record<string, string>) {
   return {
     fakeUser: z.object({
@@ -975,6 +985,22 @@ export default function AdminWebinarDetail() {
   const [brandBackgroundColor, setBrandBackgroundColor] = useState("#1a1a2e");
 
   const [emailConfirmation, setEmailConfirmation] = useState(true);
+  const [regPreviewHeight, setRegPreviewHeight] = useState(400);
+  const regPreviewIframeRef = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (
+        event.data?.type === "livecast:resize" &&
+        event.source === regPreviewIframeRef.current?.contentWindow &&
+        typeof event.data.height === "number"
+      ) {
+        setRegPreviewHeight(event.data.height + 20);
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
   const [emailReminder24h, setEmailReminder24h] = useState(true);
   const [emailReminder1h, setEmailReminder1h] = useState(true);
   const [emailFollowUp, setEmailFollowUp] = useState(true);
@@ -4468,13 +4494,13 @@ export default function AdminWebinarDetail() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="relative">
-                    <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all" data-testid="text-embed-register-code">{`<iframe src="${window.location.origin}/embed/register/${id}" width="100%" height="500" frameborder="0" style="border:none;border-radius:12px;max-width:460px;"></iframe>`}</pre>
+                    <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all" data-testid="text-embed-register-code">{getEmbedRegisterCode(id)}</pre>
                     <Button
                       variant="outline"
                       size="icon"
                       className="absolute top-2 right-2"
                       onClick={() => {
-                        navigator.clipboard.writeText(`<iframe src="${window.location.origin}/embed/register/${id}" width="100%" height="500" frameborder="0" style="border:none;border-radius:12px;max-width:460px;"></iframe>`);
+                        navigator.clipboard.writeText(getEmbedRegisterCode(id));
                         toast({ title: s.toastEmbedCodeCopied });
                       }}
                       data-testid="button-copy-embed-register"
@@ -4486,10 +4512,11 @@ export default function AdminWebinarDetail() {
                     <p className="text-xs text-muted-foreground">{s.settingsPreviewEffect}</p>
                     <div className="mt-2 border rounded-md overflow-hidden" style={{ maxWidth: 460 }}>
                       <iframe
+                        ref={regPreviewIframeRef}
                         src={`/embed/register/${id}`}
                         width="100%"
-                        height="400"
-                        style={{ border: "none" }}
+                        height={regPreviewHeight}
+                        style={{ border: "none", display: "block" }}
                         title={s.settingsRegFormPreview}
                       />
                     </div>
