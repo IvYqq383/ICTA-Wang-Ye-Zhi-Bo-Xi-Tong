@@ -222,6 +222,8 @@ const t: Record<LangAdmin, Record<string, string>> = {
     tzSydney: "雪梨",
     schedScheduledTitle: "排程場次",
     schedScheduledDesc: "循環活動會自動在指定時間排程",
+    schedRecurringEnabledLabel: "啟用循環排程",
+    schedRecurringEnabledHint: "關閉後，報名頁會改顯示「場次管理」裡手動新增的場次，不再依此規則自動產生時段。",
     schedEveryDay: "每天",
     schedEveryWeek: "每週",
     schedEveryTwoWeeks: "每兩週",
@@ -645,6 +647,8 @@ const t: Record<LangAdmin, Record<string, string>> = {
     tzSydney: "悉尼",
     schedScheduledTitle: "排程场次",
     schedScheduledDesc: "循环活动会自动在指定时间排程",
+    schedRecurringEnabledLabel: "启用循环排程",
+    schedRecurringEnabledHint: "关闭后，报名页会改显示「场次管理」里手动新增的场次，不再依此规则自动产生时段。",
     schedEveryDay: "每天",
     schedEveryWeek: "每周",
     schedEveryTwoWeeks: "每两周",
@@ -2127,6 +2131,29 @@ export default function AdminWebinarDetail() {
                         <h2 className="text-lg font-semibold" data-testid="text-scheduled-webinars-title">{s.schedScheduledTitle}</h2>
                         <p className="text-sm text-muted-foreground">{s.schedScheduledDesc}</p>
 
+                        <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+                          <div>
+                            <Label className="font-medium">{s.schedRecurringEnabledLabel}</Label>
+                            <p className="text-sm text-muted-foreground">{s.schedRecurringEnabledHint}</p>
+                          </div>
+                          <Switch
+                            checked={recurringEnabled}
+                            onCheckedChange={(checked) => {
+                              setRecurringEnabled(checked);
+                              updateWebinar.mutate({
+                                recurringSchedule: {
+                                  enabled: checked,
+                                  frequency: scheduleFrequency,
+                                  days: recurringDays,
+                                  times: scheduledTimeSlots,
+                                  excludeDates: recurringExcludeDates.split(",").map(d => d.trim()).filter(Boolean),
+                                },
+                              });
+                            }}
+                            data-testid="switch-recurring-enabled"
+                          />
+                        </div>
+
                         <div className="space-y-4">
                           <div className="flex items-center gap-3 flex-wrap">
                             <Select value={scheduleFrequency} onValueChange={setScheduleFrequency}>
@@ -2223,7 +2250,7 @@ export default function AdminWebinarDetail() {
                             onClick={() => {
                               updateWebinar.mutate({
                                 recurringSchedule: {
-                                  enabled: true,
+                                  enabled: recurringEnabled,
                                   frequency: scheduleFrequency,
                                   days: recurringDays,
                                   times: scheduledTimeSlots,
@@ -2243,7 +2270,7 @@ export default function AdminWebinarDetail() {
                               try {
                                 await apiRequest("PATCH", `/api/webinars/${id}`, {
                                   recurringSchedule: {
-                                    enabled: true,
+                                    enabled: recurringEnabled,
                                     frequency: scheduleFrequency,
                                     days: recurringDays,
                                     times: scheduledTimeSlots,
