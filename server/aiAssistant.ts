@@ -77,9 +77,13 @@ export async function answerViewerQuestion(
       messages: [{ role: "user", content: question }],
     });
 
-    const block = response.content[0];
-    const text = block && block.type === "text" ? block.text.trim() : "";
-    if (!text) return null;
+    // 用 find 而非假設 content[0] 一定是文字區塊，避免未來出現其他區塊型別時取到空字串
+    const textBlock = response.content.find((b) => b.type === "text");
+    const text = textBlock && textBlock.type === "text" ? textBlock.text.trim() : "";
+    if (!text) {
+      console.error("[aiAssistant] AI 回應沒有文字內容，stop_reason:", response.stop_reason);
+      return null;
+    }
 
     // AI 判定答不出來 → 用自訂回覆
     if (text.includes(NO_ANSWER_TOKEN)) {

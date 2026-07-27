@@ -3,9 +3,12 @@ import { getAnthropic, AI_MODEL } from "./anthropic";
 
 const MAX_CONTEXT_CHARS = 24000;
 
-// 從 AI 回覆中萃取 JSON（容忍 ```json 圍欄或前後雜訊）
-function parseJson<T>(text: string): T | null {
-  if (!text) return null;
+// 從 AI 回覆中萃取 JSON（容忍 ```json 圍欄或前後雜訊）；解析失敗時記錄原始內容方便排查
+function parseJson<T>(text: string, label: string): T | null {
+  if (!text) {
+    console.error(`[aiGenerator:${label}] AI 回應為空`);
+    return null;
+  }
   let t = text.trim();
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) t = fence[1].trim();
@@ -17,7 +20,13 @@ function parseJson<T>(text: string): T | null {
   }
   try {
     return JSON.parse(t) as T;
-  } catch {
+  } catch (err) {
+    console.error(
+      `[aiGenerator:${label}] JSON 解析失敗:`,
+      err,
+      "\n原始回應（前 2000 字）:",
+      text.slice(0, 2000)
+    );
     return null;
   }
 }
@@ -33,8 +42,12 @@ async function callJson(system: string, user: string, maxTokens = 4096): Promise
     system,
     messages: [{ role: "user", content: user }],
   });
-  const block = response.content[0];
-  return block && block.type === "text" ? block.text : "";
+  // 用 find 而非假設 content[0] 一定是文字區塊，避免未來出現其他區塊型別時取到空字串
+  const textBlock = response.content.find((b) => b.type === "text");
+  if (response.stop_reason === "max_tokens") {
+    console.error(`[aiGenerator] 回應被 max_tokens（${maxTokens}）截斷，可能導致 JSON 不完整`);
+  }
+  return textBlock && textBlock.type === "text" ? textBlock.text : "";
 }
 
 function clampTime(sec: number, duration: number): number {
@@ -87,7 +100,7 @@ export async function generateInteractions(
       : `（沒有逐字稿，請依研討會主題與目標合理推估時間軸生成互動內容。）`;
 
     const raw = await callJson(system, userMsg, 8192);
-    const parsed = parseJson<GeneratedInteractions>(raw);
+    const parsed = parseJson<GeneratedInteractions>(raw, "generateInteractions");
     if (!parsed) return null;
 
     const fakeUsers = Array.isArray(parsed.fakeUsers) ? parsed.fakeUsers.filter((n) => typeof n === "string" && n.trim()).map((n) => n.trim()) : [];
@@ -171,7 +184,7 @@ export async function generateEmailSequence(
       : `（無額外資料，請依主題與目標撰寫。）`;
 
     const raw = await callJson(system, userMsg, 8192);
-    const parsed = parseJson<{ emails: GeneratedEmail[] }>(raw);
+    const parsed = parseJson<{ emails: GeneratedEmail[] }>(raw, "generateEmailSequence");
     const emails = parsed?.emails;
     if (!Array.isArray(emails)) return null;
 
@@ -223,7 +236,7 @@ export async function generateSocialPosts(
       : `（無額外資料，請依主題與目標撰寫。）`;
 
     const raw = await callJson(system, userMsg, 6144);
-    const parsed = parseJson<{ posts: GeneratedPost[] }>(raw);
+    const parsed = parseJson<{ posts: GeneratedPost[] }>(raw, "generateSocialPosts");
     const posts = parsed?.posts;
     if (!Array.isArray(posts)) return null;
 
