@@ -77,6 +77,7 @@ export default function Registration() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [registered, setRegistered] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, boolean>>({});
@@ -132,10 +133,14 @@ export default function Registration() {
       if (registration?.id) {
         localStorage.setItem(`webinar_reg_${id}`, registration.id);
       }
+      const pendingVerification = !!registration?.verificationSent;
+      setNeedsVerification(pendingVerification);
       setRegistered(true);
       toast({
-        title: "報名成功！",
-        description: registration?.already ? "您先前已報名過，確認信不再重寄" : "確認信已發送到您的 Email",
+        title: pendingVerification ? "請查收驗證信" : "報名成功！",
+        description: pendingVerification
+          ? "請點擊信中連結完成信箱驗證"
+          : (registration?.already ? "您先前已報名過，確認信不再重寄" : "確認信已發送到您的 Email"),
       });
     },
     onError: (error: any) => {
@@ -264,10 +269,14 @@ export default function Registration() {
               <CheckCircle className="h-8 w-8 text-green-600" />
             </div>
             <h2 className="text-2xl font-bold mb-2" data-testid="text-registration-success">
-              {thankYou?.enabled && thankYou.headline ? thankYou.headline : "報名成功！"}
+              {needsVerification
+                ? "請查收信箱完成驗證"
+                : (thankYou?.enabled && thankYou.headline ? thankYou.headline : "報名成功！")}
             </h2>
             <p className="text-muted-foreground mb-6">
-              {thankYou?.enabled && thankYou.message ? thankYou.message : "我們已將直播連結發送至您的 Email，請在直播時間準時加入。"}
+              {needsVerification
+                ? "我們已寄出一封驗證信到您的 Email，請點擊信中的連結完成驗證，才能進入直播間並收到後續提醒。"
+                : (thankYou?.enabled && thankYou.message ? thankYou.message : "我們已將直播連結發送至您的 Email，請在直播時間準時加入。")}
             </p>
             <div className="bg-muted rounded-md p-4 mb-6 text-left">
               <h3 className="font-semibold mb-3 text-center">{webinar.title}</h3>
@@ -297,14 +306,16 @@ export default function Registration() {
                 {thankYou.ctaText}
               </Button>
             )}
-            <Button
-              onClick={() => setLocation(`/webinar/${id}`)}
-              className="w-full"
-              variant={thankYou?.enabled && thankYou.ctaText && thankYou.ctaUrl ? "outline" : "default"}
-              data-testid="button-enter-webinar"
-            >
-              {mode === "onDemand" ? "立即觀看" : "進入直播間"}
-            </Button>
+            {!needsVerification && (
+              <Button
+                onClick={() => setLocation(`/webinar/${id}`)}
+                className="w-full"
+                variant={thankYou?.enabled && thankYou.ctaText && thankYou.ctaUrl ? "outline" : "default"}
+                data-testid="button-enter-webinar"
+              >
+                {mode === "onDemand" ? "立即觀看" : "進入直播間"}
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>

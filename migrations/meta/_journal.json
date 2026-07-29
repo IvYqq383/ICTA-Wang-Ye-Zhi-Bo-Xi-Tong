@@ -8,6 +8,13 @@
       "when": 1783686933368,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785332386974,
+      "tag": "0001_registration_email_verification",
+      "breakpoints": true
     }
   ]
 }

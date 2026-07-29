@@ -163,10 +163,16 @@ export const registrations = webinarDbSchema.table("registrations", {
 
   // 報名者標籤 / 分群
   tags: text("tags").array().default(sql`'{}'::text[]`),
+
+  // 信箱驗證（公開報名頁強制驗證；課程平台等已登入來源的報名會直接標記為已驗證）
+  emailVerified: boolean("email_verified").notNull().default(false),
+  verificationToken: text("verification_token"),
+  verifiedAt: timestamp("verified_at"),
 });
 
-export const insertRegistrationSchema = createInsertSchema(registrations).omit({ 
-  id: true, registeredAt: true, attended: true, attendedAt: true, leftAt: true, watchDuration: true 
+export const insertRegistrationSchema = createInsertSchema(registrations).omit({
+  id: true, registeredAt: true, attended: true, attendedAt: true, leftAt: true, watchDuration: true,
+  emailVerified: true, verificationToken: true, verifiedAt: true,
 });
 export type InsertRegistration = z.infer<typeof insertRegistrationSchema>;
 export type Registration = typeof registrations.$inferSelect;

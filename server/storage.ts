@@ -58,6 +58,7 @@ export interface IStorage {
   getRegistration(id: string): Promise<Registration | undefined>;
   getRegistrationsByWebinar(webinarId: string): Promise<Registration[]>;
   getRegistrationByEmail(webinarId: string, email: string): Promise<Registration | undefined>;
+  getRegistrationByToken(token: string): Promise<Registration | undefined>;
   updateRegistration(id: string, data: Partial<Registration>): Promise<Registration | undefined>;
   
   // Fake Users
@@ -359,6 +360,11 @@ export class DatabaseStorage implements IStorage {
 
   async updateRegistration(id: string, data: Partial<Registration>): Promise<Registration | undefined> {
     const result = await db.update(registrations).set(data).where(eq(registrations.id, id)).returning();
+    return result[0];
+  }
+
+  async getRegistrationByToken(token: string): Promise<Registration | undefined> {
+    const result = await db.select().from(registrations).where(eq(registrations.verificationToken, token));
     return result[0];
   }
 

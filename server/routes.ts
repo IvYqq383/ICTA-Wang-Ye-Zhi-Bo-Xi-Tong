@@ -5,7 +5,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
-import { sendWebinarRegistrationEmail, sendQuestionNotificationEmail } from "./email";
+import { sendWebinarRegistrationEmail, sendQuestionNotificationEmail, sendVerificationEmail } from "./email";
 import { createEmailRemindersForRegistration, startEmailScheduler } from "./email-scheduler";
 import crypto from "crypto";
 import {
@@ -1229,27 +1229,53 @@ export async function registerRoutes(
       if (!webinarCheck || webinarCheck.publishStatus !== "published") {
         return res.status(403).json({ message: "此直播間尚未發佈，無法報名" });
       }
-      
+
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      // 已登入來源（如課程平台一鍵報名）的 Email 本來就經過會員系統驗證，不需再走一次信箱驗證
+      const trustedSource = data.source === "course-platform";
+
       const existing = await storage.getRegistrationByEmail(data.webinarId, data.email);
       if (existing) {
+        if (!existing.emailVerified && !trustedSource) {
+          // 尚未驗證：重新寄一次驗證信（信可能遺失或進垃圾郵件），不算新報名
+          try {
+            const token = existing.verificationToken || crypto.randomBytes(24).toString("hex");
+            if (!existing.verificationToken) {
+              await storage.updateRegistration(existing.id, { verificationToken: token });
+            }
+            const verifyUrl = `${baseUrl}/api/registrations/verify?token=${token}`;
+            await sendVerificationEmail(existing.email, existing.name, webinarCheck.title, verifyUrl);
+          } catch (emailError) {
+            console.error("Failed to resend verification email:", emailError);
+          }
+          return res.json({ ...existing, already: true, verificationSent: true });
+        }
         // 冪等：同 Email 重複報名回傳既有報名（不重寄信），方便外部系統（如課程平台）一鍵進場
         return res.json({ ...existing, already: true });
       }
 
-      const registration = await storage.createRegistration(data);
-      
+      const emailVerified = trustedSource;
+      const verificationToken = emailVerified ? null : crypto.randomBytes(24).toString("hex");
+
+      const registration = await storage.createRegistration({
+        ...data,
+        emailVerified,
+        verificationToken,
+      } as any);
+
       dispatchWebhook(data.webinarId, "registration", {
         registrationId: registration.id, name: data.name, email: data.email
       });
-      
-      const webinar = await storage.getWebinar(data.webinarId);
-      if (webinar) {
-        const baseUrl = `${req.protocol}://${req.get("host")}`;
-        // 帶上報名編號，觀眾點信件連結進場才能記錄出席與觀看時長
-        const webinarUrl = `${baseUrl}/webinar/${data.webinarId}?reg=${registration.id}`;
-        const emailSettings = webinar.emailSettings as any;
-        
-        if (!emailSettings || emailSettings.confirmationEnabled !== false) {
+
+      const webinar = webinarCheck;
+      // 帶上報名編號，觀眾點信件連結進場才能記錄出席與觀看時長
+      const webinarUrl = `${baseUrl}/webinar/${data.webinarId}?reg=${registration.id}`;
+      const emailSettings = webinar.emailSettings as any;
+      const confirmationEnabled = !emailSettings || emailSettings.confirmationEnabled !== false;
+
+      if (emailVerified) {
+        // 受信任來源：照舊寄送報名確認信、直接建立提醒序列
+        if (confirmationEnabled) {
           try {
             await sendWebinarRegistrationEmail(
               data.email,
@@ -1262,18 +1288,55 @@ export async function registerRoutes(
             console.error("Failed to send email:", emailError);
           }
         }
-        
         try {
           await createEmailRemindersForRegistration(registration, webinar, baseUrl);
         } catch (reminderError) {
           console.error("Failed to create reminders:", reminderError);
         }
+      } else {
+        // 公開報名頁：先寄驗證信，提醒序列等驗證通過後才建立（避免通知未證實為本人的信箱）
+        try {
+          const verifyUrl = `${baseUrl}/api/registrations/verify?token=${verificationToken}`;
+          await sendVerificationEmail(data.email, data.name, webinar.title, verifyUrl);
+        } catch (emailError) {
+          console.error("Failed to send verification email:", emailError);
+        }
       }
-      
-      res.json(registration);
+
+      res.json({ ...registration, verificationSent: !emailVerified });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
+  });
+
+  // 點擊驗證信裡的連結：標記已驗證、補建提醒序列、導向直播間
+  app.get("/api/registrations/verify", async (req, res) => {
+    const token = typeof req.query.token === "string" ? req.query.token : "";
+    if (!token) return res.status(400).send("驗證連結無效");
+
+    const registration = await storage.getRegistrationByToken(token);
+    if (!registration) {
+      return res.status(400).send("驗證連結無效或已使用過");
+    }
+
+    const webinar = await storage.getWebinar(registration.webinarId);
+    if (!webinar) return res.status(404).send("找不到對應的直播間");
+
+    if (!registration.emailVerified) {
+      await storage.updateRegistration(registration.id, {
+        emailVerified: true,
+        verifiedAt: new Date(),
+        verificationToken: null,
+      });
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      try {
+        await createEmailRemindersForRegistration(registration, webinar, baseUrl);
+      } catch (reminderError) {
+        console.error("Failed to create reminders after verification:", reminderError);
+      }
+    }
+
+    res.redirect(`/webinar/${registration.webinarId}?reg=${registration.id}`);
   });
 
   app.patch("/api/webinars/:id/registrations/:regId/tags", requireWebinarOwner, async (req, res) => {

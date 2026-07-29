@@ -72,6 +72,8 @@ function Countdown({ target }: { target: number }) {
 export default function EmbedRegister() {
   const { id } = useParams<{ id: string }>();
   const [registered, setRegistered] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [registrationId, setRegistrationId] = useState<string | null>(null);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [showSessionPicker, setShowSessionPicker] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -117,9 +119,15 @@ export default function EmbedRegister() {
       if (Object.keys(customFieldValues).length > 0) {
         payload.customFieldData = customFieldValues;
       }
-      return apiRequest("POST", "/api/registrations", payload);
+      const res = await apiRequest("POST", "/api/registrations", payload);
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (registration: any) => {
+      if (registration?.id) {
+        setRegistrationId(registration.id);
+        localStorage.setItem(`webinar_reg_${id}`, registration.id);
+      }
+      setNeedsVerification(!!registration?.verificationSent);
       setRegistered(true);
       setErrorMessage(null);
       try {
@@ -243,10 +251,14 @@ export default function EmbedRegister() {
           <CheckCircle className="h-7 w-7 text-green-600" />
         </div>
         <h3 className="text-xl font-bold mb-2" data-testid="text-embed-success">
-          {thankYou?.enabled && thankYou.headline ? thankYou.headline : "報名成功！"}
+          {needsVerification
+            ? "請查收信箱完成驗證"
+            : (thankYou?.enabled && thankYou.headline ? thankYou.headline : "報名成功！")}
         </h3>
         <p className="text-sm text-muted-foreground mb-4">
-          {thankYou?.enabled && thankYou.message ? thankYou.message : "確認信已發送至您的 Email"}
+          {needsVerification
+            ? "請點擊信中連結完成驗證，才能進入直播間"
+            : (thankYou?.enabled && thankYou.message ? thankYou.message : "確認信已發送至您的 Email")}
         </p>
         <div className="bg-muted rounded-md p-3 mb-4">
           <h4 className="font-semibold text-sm mb-1">{webinar.title}</h4>
@@ -272,15 +284,17 @@ export default function EmbedRegister() {
             {thankYou.ctaText}
           </Button>
         )}
-        <Button
-          className="w-full"
-          variant={thankYou?.enabled && thankYou.ctaText && thankYou.ctaUrl ? "outline" : "default"}
-          style={thankYou?.enabled && thankYou.ctaText && thankYou.ctaUrl ? undefined : { backgroundColor: accentColor }}
-          onClick={() => window.open(`${window.location.origin}/webinar/${id}`, "_blank")}
-          data-testid="button-embed-enter-webinar"
-        >
-          {mode === "onDemand" ? "立即觀看" : "進入直播間"}
-        </Button>
+        {!needsVerification && (
+          <Button
+            className="w-full"
+            variant={thankYou?.enabled && thankYou.ctaText && thankYou.ctaUrl ? "outline" : "default"}
+            style={thankYou?.enabled && thankYou.ctaText && thankYou.ctaUrl ? undefined : { backgroundColor: accentColor }}
+            onClick={() => window.open(`${window.location.origin}/webinar/${id}${registrationId ? `?reg=${registrationId}` : ""}`, "_blank")}
+            data-testid="button-embed-enter-webinar"
+          >
+            {mode === "onDemand" ? "立即觀看" : "進入直播間"}
+          </Button>
+        )}
       </div>
     );
   }
