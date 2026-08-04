@@ -2129,7 +2129,9 @@ export default function AdminWebinarDetail() {
                             const scheduleMode = {
                               recurring: eventType === "recurring",
                               onDemand: isOnDemand,
-                              justInTime: existingSm?.justInTime || false,
+                              // 這個面板的四個選項都不是「即時開始」，儲存時一併關閉，
+                              // 避免跟「即時開始」分頁各自儲存的旗標同時為 true、互相蓋掉
+                              justInTime: false,
                               justInTimeMinutes: existingSm?.justInTimeMinutes || 15,
                               eventType,
                               eventEndType,
