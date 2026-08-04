@@ -178,6 +178,8 @@ const t: Record<LangAdmin, Record<string, string>> = {
     pgSaved: "頁面設定已儲存",
     ntQuestionNotify: "有人發問時通知我",
     ntQuestionNotifyHint: "觀眾提交問題時，寄 Email 通知主持人。",
+    ntRegistrationNotify: "有人報名時通知我",
+    ntRegistrationNotifyHint: "每有一筆新報名，寄 Email 通知主辦人（含姓名/Email/電話）。",
     ntEmail: "通知 Email（留空則寄到帳號 Email）",
     ntSave: "儲存通知設定",
     ntSaved: "通知設定已儲存",
@@ -603,6 +605,8 @@ const t: Record<LangAdmin, Record<string, string>> = {
     pgSaved: "页面设置已保存",
     ntQuestionNotify: "有人发问时通知我",
     ntQuestionNotifyHint: "观众提交问题时，寄 Email 通知主持人。",
+    ntRegistrationNotify: "有人报名时通知我",
+    ntRegistrationNotifyHint: "每有一笔新报名，寄 Email 通知主办人（含姓名/Email/电话）。",
     ntEmail: "通知 Email（留空则寄到账号 Email）",
     ntSave: "储存通知设置",
     ntSaved: "通知设置已保存",
@@ -1057,6 +1061,7 @@ export default function AdminWebinarDetail() {
   const [replayCtaUrl, setReplayCtaUrl] = useState("");
 
   const [notifyQuestionEmail, setNotifyQuestionEmail] = useState(false);
+  const [notifyRegistrationEmail, setNotifyRegistrationEmail] = useState(false);
   const [notifyEmail, setNotifyEmail] = useState("");
 
   const [editTagsRegId, setEditTagsRegId] = useState<string | null>(null);
@@ -1284,6 +1289,7 @@ export default function AdminWebinarDetail() {
       const ns = webinar.notifySettings as any;
       if (ns) {
         setNotifyQuestionEmail(ns.questionEmailEnabled ?? false);
+        setNotifyRegistrationEmail(ns.registrationEmailEnabled ?? false);
         setNotifyEmail(ns.notifyEmail || "");
       }
 
@@ -1601,7 +1607,11 @@ export default function AdminWebinarDetail() {
   const saveNotify = useMutation({
     mutationFn: async () => {
       return apiRequest("PATCH", `/api/webinars/${id}`, {
-        notifySettings: { questionEmailEnabled: notifyQuestionEmail, notifyEmail: notifyEmail.trim() },
+        notifySettings: {
+          questionEmailEnabled: notifyQuestionEmail,
+          registrationEmailEnabled: notifyRegistrationEmail,
+          notifyEmail: notifyEmail.trim(),
+        },
       });
     },
     onSuccess: () => {
@@ -2518,6 +2528,17 @@ export default function AdminWebinarDetail() {
                       checked={notifyQuestionEmail}
                       onCheckedChange={setNotifyQuestionEmail}
                       data-testid="switch-notify-question"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <Label>{s.ntRegistrationNotify}</Label>
+                      <p className="text-sm text-muted-foreground">{s.ntRegistrationNotifyHint}</p>
+                    </div>
+                    <Switch
+                      checked={notifyRegistrationEmail}
+                      onCheckedChange={setNotifyRegistrationEmail}
+                      data-testid="switch-notify-registration"
                     />
                   </div>
                   <div className="space-y-2">

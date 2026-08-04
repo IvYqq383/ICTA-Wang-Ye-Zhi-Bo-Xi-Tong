@@ -216,3 +216,55 @@ export async function sendQuestionNotificationEmail(
     htmlBody,
   });
 }
+
+export async function sendRegistrationNotificationEmail(
+  to: string,
+  webinarTitle: string,
+  name: string,
+  email: string,
+  phone: string,
+  reportUrl: string,
+) {
+  const safeTitle = escapeHtml(webinarTitle);
+  const safeName = escapeHtml(name);
+  const safeEmail = escapeHtml(email);
+  const safePhone = escapeHtml(phone || "（未填寫）");
+  const htmlBody = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 24px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9fafb; padding: 28px; border-radius: 0 0 10px 10px; }
+        .info { background: white; padding: 18px; border-left: 4px solid #667eea; border-radius: 6px; margin: 18px 0; }
+        .info p { margin: 4px 0; }
+        .button { display: inline-block; background: #667eea; color: white; padding: 12px 26px; text-decoration: none; border-radius: 8px; margin: 14px 0; }
+        .footer { text-align: center; color: #888; font-size: 13px; margin-top: 18px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header"><h2>有新報名 📝</h2></div>
+        <div class="content">
+          <p>研討會「<strong>${safeTitle}</strong>」有新的報名：</p>
+          <div class="info">
+            <p><strong>姓名：</strong>${safeName}</p>
+            <p><strong>Email：</strong>${safeEmail}</p>
+            <p><strong>電話：</strong>${safePhone}</p>
+          </div>
+          <center><a href="${reportUrl}" class="button">前往後台查看報名名單</a></center>
+        </div>
+        <div class="footer"><p>此郵件由系統自動發送，請勿直接回覆。</p></div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return sendEmail({
+    to,
+    subject: `【新報名】${webinarTitle} - ${name}`,
+    htmlBody,
+  });
+}

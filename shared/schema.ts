@@ -91,11 +91,12 @@ export const webinars = webinarDbSchema.table("webinars", {
     ctaUrl: string;
   }>().default({ headline: "", message: "", ctaText: "", ctaUrl: "" }),
 
-  // 通知設定（有人發問時通知主持人）
+  // 通知設定（有人發問 / 有人報名時通知主持人）
   notifySettings: jsonb("notify_settings").$type<{
     questionEmailEnabled: boolean;
+    registrationEmailEnabled: boolean;
     notifyEmail: string; // 留空則寄給帳號 Email
-  }>().default({ questionEmailEnabled: false, notifyEmail: "" }),
+  }>().default({ questionEmailEnabled: false, registrationEmailEnabled: false, notifyEmail: "" }),
 
   // 重播設定
   replayEnabled: boolean("replay_enabled").default(true),

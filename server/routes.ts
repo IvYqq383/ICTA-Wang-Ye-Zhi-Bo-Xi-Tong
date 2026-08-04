@@ -5,7 +5,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
-import { sendWebinarRegistrationEmail, sendQuestionNotificationEmail, sendVerificationEmail } from "./email";
+import { sendWebinarRegistrationEmail, sendQuestionNotificationEmail, sendVerificationEmail, sendRegistrationNotificationEmail } from "./email";
 import { createEmailRemindersForRegistration, startEmailScheduler } from "./email-scheduler";
 import crypto from "crypto";
 import {
@@ -1266,6 +1266,26 @@ export async function registerRoutes(
       dispatchWebhook(data.webinarId, "registration", {
         registrationId: registration.id, name: data.name, email: data.email
       });
+
+      // 有人報名時通知主辦人（不擋回應，寄信失敗只記錄不影響報名結果）
+      (async () => {
+        try {
+          const notify = webinarCheck.notifySettings as any;
+          if (!notify?.registrationEmailEnabled) return;
+          let to = (notify.notifyEmail || "").trim();
+          if (!to && webinarCheck.userId) {
+            const owner = await storage.getUser(webinarCheck.userId);
+            to = owner?.email || "";
+          }
+          if (!to) return;
+          const reportUrl = `${baseUrl}/admin/webinar/${webinarCheck.id}`;
+          await sendRegistrationNotificationEmail(
+            to, webinarCheck.title, data.name, data.email, data.phone || "", reportUrl
+          );
+        } catch (err) {
+          console.error("Failed to send registration notification:", err);
+        }
+      })();
 
       const webinar = webinarCheck;
       // 帶上報名編號，觀眾點信件連結進場才能記錄出席與觀看時長
